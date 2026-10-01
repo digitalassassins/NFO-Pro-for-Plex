@@ -149,7 +149,7 @@ class PlexNFOPro(QMainWindow):
     
     def buy_us_a_coffee(self):
         import webbrowser
-        from cryptography.fernet import Fernet        
+        from cryptography.fernet import Fernet
         kS = ["Y44hH0iJ80tw4GrkaIYiZT-2wZABl_D4T7cE9-e5EOw=", "gAAAAABqvgoWUQKMbSe0lpMO-MTa5xhaQ9zZSsXIt4BPWmgnzWjwoaSGH5WM9NW7PCmDAwH76nPdsvFLcZEHAntAteI5sXD9E1deaF-PTiea7a-XSIp9Cy0gOyrEHdC-BdE5Ft3cVe4BLfOCcQNE8L4NcRy98M4aZQ=="]; fernet = Fernet(kS[0]);
         webbrowser.open(fernet.decrypt(kS[1]).decode(), new=0, autoraise=True)
     
@@ -245,6 +245,9 @@ class PlexNFOPro(QMainWindow):
         if not sections:
             sections = self.fileManager.load_saved_sections()
         first_section=True
+        first_key = None
+        first_type = None
+        
         if sections:
             #print("Sections:", sections)
             for key in sections:
@@ -255,7 +258,8 @@ class PlexNFOPro(QMainWindow):
                             first_type = section["type"] ## get the first section to load on init
                             first_section = False
                         self.create_menu_button(section["type"], section["key"], section["title"], section["uuid"])        
-        self.first_init_load(first_key, first_type) ## load the first section in on load
+        if first_key and first_type:
+            self.first_init_load(first_key, first_type) ## load the first section in on load
                 
     def clear_main_menu(self):
         for key in list(self.MenuButtons):
@@ -1137,8 +1141,17 @@ class PlexNFOPro(QMainWindow):
         self.image_thread.quit()
         self.image_thread.wait()
         super().closeEvent(event)
+
+## helper function not included in class to move the window centre
+def move_window_center(window):
+    screen = QApplication.primaryScreen()             # the screen the window will open on
+    available = screen.availableGeometry()            # usable area (excludes taskbar/dock)
+    frame = window.frameGeometry()                    # the window's rectangle, including the title bar
+    frame.moveCenter(available.center())              # put the rectangle's centre on the screen's centre
+    window.move(frame.topLeft())                      # move the window to that rectangle's top-left corner
     
 app = QtWidgets.QApplication(sys.argv)
 window = PlexNFOPro()
+move_window_center(window)
 window.show()
 sys.exit(app.exec())
