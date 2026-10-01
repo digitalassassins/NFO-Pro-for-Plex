@@ -261,7 +261,7 @@ class PlexNFOGenerator():
             released = datetime.strptime(released, '%Y-%m-%d').strftime('%Y-%m-%d')
             xmlET.SubElement(root, "premiered").text = released
         
-        for tag in movie.get("labels", []):
+        for tag in season.get("labels", []):
             xmlET.SubElement(root, "tag").text = tag
         
         ratings = season.get("ratings", [])

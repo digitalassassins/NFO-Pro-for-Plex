@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 from PyQt6.QtCore import QTimer, QObject, QThread, pyqtSignal
 import os
 import time
-import images
+import images.images
 import hashlib
 from includes.settings import PlexNFOProSettings
 from includes.scanner import PlexNFOScanner
