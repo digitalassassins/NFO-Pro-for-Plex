@@ -54,7 +54,10 @@ class PlexNFOProSettings():
     
     def get_plex_credentials(self):
         settings = self.get_settings()
-        return settings['plexURL'], settings['plexToken']
+        if settings:
+            return settings['plexURL'], settings['plexToken']
+        else:
+            return "",""
     
     def load_settings(self):
         settings = self.get_settings()

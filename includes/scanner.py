@@ -56,14 +56,16 @@ class Scanner(QObject):
     
     
     def get_plex_credentials(self):
-        self.plex_url, self.plex_token = self.settings.get_plex_credentials()
+        self.plex_url, self.plex_token = plex_url, plex_token = self.settings.get_plex_credentials()
+        
     
     def connect_to_plex_server(self):
         if self.plexServer == None:
             self.plexServer = PlexNFOPlexAPIManager(self.log)
         if not self.plex_connected:
             self.get_plex_credentials()
-            self.plexServer.connect( self.plex_url, self.plex_token )
+            if self.plex_url != "" and self.plex_token != "":
+                self.plexServer.connect( self.plex_url, self.plex_token )
     
     def log(self, text="", status=None, ltype="line"):
         self.scannerLog.emit(text, status, ltype)
