@@ -315,14 +315,13 @@ class PlexNFOGenerator():
         
         xmlET.SubElement(root, "title").text = episode.get("title", "")
         
-        xmlET.SubElement(root, "season").text = episode.get("season_no", "")
+        xmlET.SubElement(root, "season").text = str(episode.get("season_no", ""))
         
-        xmlET.SubElement(root, "episode").text = episode.get("episode_no", "")
+        xmlET.SubElement(root, "episode").text = str(episode.get("episode_no", ""))
         
-        if int(episode.get("viewCount") or 0) > 0 or episode.get("lastViewedAt"):
-            xmlET.SubElement(root, "playcount").text = str(episode.get("viewCount"))
-        
-        if int(episode.get("viewCount")) > 0 or episode.get("lastViewedAt"):
+        view_count = int(episode.get("viewCount") or 0)        
+        if view_count > 0 or episode.get("lastViewedAt"):
+            xmlET.SubElement(root, "playcount").text = str(view_count)
             xmlET.SubElement(root, "watched").text = "true"
         
         if episode.get("summary"):
