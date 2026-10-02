@@ -35,6 +35,7 @@ class Scanner(QObject):
         self.plex_connected = False                                     ## set the default plex connected flag as false
         self.connect_to_plex_server()                                   ## connect the plex server on init
         self.local_files = {}
+        self.local_files_scanned_at = {}                                # when each library's video files were last scanned
         self.local_folders = {}
         self.reset_thumbnail_count()                                    ## set the thumbnail count to 0
         
@@ -77,7 +78,10 @@ class Scanner(QObject):
     def set_cache_clear(self, cache_clear=False):
         self.cache_clear = cache_clear ## clear cache bool
     
-    def list_folder_matched_single_section_by_id(self, library_id):
+    def list_folder_matched_single_section_by_id(self, library_id, max_age=300):
+        last_scan = self.local_files_scanned_at.get(library_id)
+        if last_scan and self.local_files.get(library_id) and (time.time() - last_scan) < max_age:
+            return    # scanned recently, reuse the results already stored in self.local_files
         sections = self.fileManager.load_saved_sections()
         if sections:
             for key in list(sections):
@@ -91,7 +95,8 @@ class Scanner(QObject):
                             local_folder = str(local_folder.split(":||:")[1])
                             self.local_files[section["key"]] = self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=None)
                             #print(self.local_files[section["key"]])
-                
+                            
+                        self.local_files_scanned_at[section["key"]] = time.time()
         
     def list_folder_matched_sections(self):
         
@@ -461,6 +466,18 @@ class ScannerWorker(QObject):
         self.mode = mode
         self.kargs = kargs
     
+    def disconnect_scanner(self):
+        for signal, slot in (
+            (self._scanner.scannerProgress, self.update_progress),
+            (self._scanner.scannerUpdateThumbnailTotal, self.update_thumbnail_total),
+            (self._scanner.scannerLog, self.log),
+            (self._scanner.scannerThumbnailsReady, self.update_batch_thumbnails_in_log),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass   # already disconnected or already deleted
+    
     def update_thumbnail_total(self, total):
         self.totalThumbnails = total
     
@@ -784,7 +801,7 @@ class PlexNFOScanner(QObject):
     def start_scan(self):
         if self._busy:
             self.log("Looks like you have already started a scan, please wait for the previous scan to finish before proceeding.")
-            return
+            return False
             
         self._busy = True
         self.clear_log_window()
@@ -807,7 +824,8 @@ class PlexNFOScanner(QObject):
     
     def single_item_scan(self, iwid, item, update_widget_callback=None, single_item_progress_callback=None, finished_callback=None):
         if self._busy:
-            return
+            return False
+            
         self._busy = True
         self.thread = QThread()
         self.worker = ScannerWorker(self.settings, self._scanner)
@@ -818,6 +836,7 @@ class PlexNFOScanner(QObject):
         self.worker.itemRefreshReady.connect(update_widget_callback)
         self.worker.progress.connect(single_item_progress_callback)
         self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.disconnect_scanner)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(self._clear_busy)
@@ -830,7 +849,7 @@ class PlexNFOScanner(QObject):
     def start_download_item(self, iwid, item, finished_callback=None):
         if self._busy:
             self.log("Looks like you have already started a scan, please wait for the previous scan to finish before proceeding.")
-            return
+            return False
             
         self._busy = True
         self.clear_log_window()
@@ -841,6 +860,7 @@ class PlexNFOScanner(QObject):
         self.thread.started.connect(self.worker.run)
         self.thread.started.connect(self.starting.emit)
         self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.disconnect_scanner)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(self._clear_busy)

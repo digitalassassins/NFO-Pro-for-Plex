@@ -7,6 +7,7 @@ import os
 import time
 import images.images
 import hashlib
+import time
 from includes.settings import PlexNFOProSettings
 from includes.scanner import PlexNFOScanner
 from includes.file_manager import PlexNFOFileManager
@@ -550,6 +551,13 @@ class PlexNFOPro(QMainWindow):
         self.download_next_item()
         
     def download_next_item(self):
+        
+        #now = time.perf_counter()
+        #inner = self.scanner._scanner   # the Scanner object that owns scannerLog
+        #print("[batch] scannerLog receivers:", inner.receivers(inner.scannerLog),
+        #      "| seconds since last item: %.1f" % (now - getattr(self, "_last_item_time", now)))
+        #self._last_item_time = now
+        
         if not self.download_queue:
             self.download_batch_running = False
             self.current_downloading_iwid = None
@@ -573,9 +581,18 @@ class PlexNFOPro(QMainWindow):
             print("[batch] download button disabled:", iwid)
             return False
         
+        t_start = time.perf_counter()
+        
         def refresh_callback():
+            t_refresh = time.perf_counter()
+            print("[batch] download phase took %.1fs" % (t_refresh - t_start))
             print("[batch] download finished, refreshing:", iwid)
-            self.refresh_widget(iwid, on_done=lambda: self.on_download_finished(iwid))
+            
+            def refresh_done():
+                print("[batch] refresh phase took %.1fs" % (time.perf_counter() - t_refresh))
+                self.on_download_finished(iwid)
+
+            self.refresh_widget(iwid, on_done=refresh_done)
             
         started = self.scanner.start_download_item(iwid=iwid, item=self.RowWidgets[iwid].data, finished_callback=refresh_callback)
         print("[batch] download started:", iwid, started)
@@ -794,13 +811,13 @@ class PlexNFOPro(QMainWindow):
         
         if season.get('local_nfo'):
             nfo_file = str( os.path.join(season['local_folders'][0], season['local_nfo']) ).replace("\\","/")
-            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissing.setText('<a href="file:///'+ str(nfo_file) +'">Yes</a>')
+            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissing.setText('<a href="file:///'+ nfo_file +'">Yes</a>')
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissing.setOpenExternalLinks(True)
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
         
         if season.get('local_poster'):
             poster_file = str( os.path.join(season['local_poster_folder'], season['local_poster']) ).replace("\\","/")
-            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissing.setText('<a href="file:///'+ str(poster_file) +'">Yes</a>')
+            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissing.setText('<a href="file:///'+ poster_file +'">Yes</a>')
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissing.setOpenExternalLinks(True)
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
             cache_poster_filename = "poster_thumb_" + str(season["parentSlug"]) + "-season-" + str(season_no) + "." + str( self.fileManager.get_extension(season["local_poster"]) )
