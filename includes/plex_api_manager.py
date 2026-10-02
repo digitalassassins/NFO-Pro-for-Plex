@@ -216,25 +216,44 @@ class PlexNFOPlexAPIManager(QObject):
                 season_data[season.index]["episodes"] = season_data[season.index]["episodes"] | episode_data
         return season_data
     
+    def find_item_by_guid(self, section, guid):
+        ''' find an item in a library section by its agent guid '''
+        # 1) try the server-side guid filter first (fast, one request)
+        try:
+            results = section.search(guid=guid)
+            if results:
+                return results[0]
+        except Exception:
+            pass  # filter not supported for this guid, fall through
+
+        # 2) fall back to walking the library and comparing guids
+        for item in section.all():
+            if item.guid == guid:
+                return item
+        return None
+    
     def fetch_single_item(self, library_id, guid):
         section = self.serverConnection.library.sectionByID(library_id)
-        if guid and not guid.startswith("local"):
+        if guid and guid.startswith("plex"):
             video = section.getGuid(guid)
-            item_data = json.loads(toJson(video))
-            
-            if item_data:
-                if item_data["type"] == "movie":                  
-                    metadata =  item_data | self.get_additional(video) | self.get_locations(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_media(video) | self.get_countries(video) | self.get_actors(video) | self.get_directors(video) | self.get_writers(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
-                    
-                elif item_data["type"] == "show":
-                    item_data["seasons"] = self.get_seasons(video)
-                    metadata = item_data | self.get_actors(video) | self.get_directors(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_writers(video) | self.get_countries(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
-            
-                return metadata
-            else:
-                return None
         else:
-                return None
+            video = self.find_item_by_guid(section, guid)
+        if video is None:
+            return None
+        item_data = json.loads(toJson(video))
+        
+        if item_data:
+            metadata = None ## set the metadata to none to prevent unbound error
+            if item_data["type"] == "movie":                  
+                metadata =  item_data | self.get_additional(video) | self.get_locations(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_media(video) | self.get_countries(video) | self.get_actors(video) | self.get_directors(video) | self.get_writers(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
+                
+            elif item_data["type"] == "show":
+                item_data["seasons"] = self.get_seasons(video)
+                metadata = item_data | self.get_actors(video) | self.get_directors(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_writers(video) | self.get_countries(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
+        
+            return metadata
+        else:
+            return None
     
     def fetch_library_items(self, library_id, item_callback=None):
         section = self.serverConnection.library.sectionByID(library_id)
@@ -251,7 +270,7 @@ class PlexNFOPlexAPIManager(QObject):
 
             for video in batch:                
                 item_data = json.loads(toJson(video))
-                
+                metadata = None ## set the metadata to none to prevent unbound error
                 if item_data["type"] == "movie":                    
                     metadata =  item_data | self.get_additional(video) | self.get_locations(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_media(video) | self.get_countries(video) | self.get_actors(video) | self.get_directors(video) | self.get_writers(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
                     
