@@ -794,16 +794,16 @@ class PlexNFOPro(QMainWindow):
         
         if season.get('local_nfo'):
             nfo_file = str( os.path.join(season['local_folders'][0], season['local_nfo']) ).replace("\\","/")
-            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissing.setText('<a href="file:///'+ nfo_file +'">Yes</a>')
+            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissing.setText('<a href="file:///'+ str(nfo_file) +'">Yes</a>')
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissing.setOpenExternalLinks(True)
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.nfoMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
         
         if season.get('local_poster'):
             poster_file = str( os.path.join(season['local_poster_folder'], season['local_poster']) ).replace("\\","/")
-            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissing.setText('<a href="file:///'+ poster_file +'">Yes</a>')
+            self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissing.setText('<a href="file:///'+ str(poster_file) +'">Yes</a>')
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissing.setOpenExternalLinks(True)
             self.RowWidgets[iwid].SeasonWidgets[season_no].ui.posterMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
-            cache_poster_filename = "poster_thumb_" + season["parentSlug"] + "-season-" + str(season_no) + "." + self.fileManager.get_extension(season["local_poster"])
+            cache_poster_filename = "poster_thumb_" + str(season["parentSlug"]) + "-season-" + str(season_no) + "." + str( self.fileManager.get_extension(season["local_poster"]) )
             cache_poster_location = os.path.join(self.fileManager._cache, str(season["librarySectionID"]), "images", cache_poster_filename).replace("/","\\")
             #print("Path: ", cache_poster_location)
             if os.path.isfile( cache_poster_location ):

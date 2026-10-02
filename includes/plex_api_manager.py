@@ -218,20 +218,23 @@ class PlexNFOPlexAPIManager(QObject):
     
     def fetch_single_item(self, library_id, guid):
         section = self.serverConnection.library.sectionByID(library_id)
-        video = section.getGuid(guid)
-        item_data = json.loads(toJson(video))
-        
-        if item_data:
-            if item_data["type"] == "movie":                  
-                metadata =  item_data | self.get_additional(video) | self.get_locations(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_media(video) | self.get_countries(video) | self.get_actors(video) | self.get_directors(video) | self.get_writers(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
-                
-            elif item_data["type"] == "show":
-                item_data["seasons"] = self.get_seasons(video)
-                metadata = item_data | self.get_actors(video) | self.get_directors(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_writers(video) | self.get_countries(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
-        
-            return metadata
+        if guid and not guid.startswith("local"):
+            video = section.getGuid(guid)
+            item_data = json.loads(toJson(video))
+            
+            if item_data:
+                if item_data["type"] == "movie":                  
+                    metadata =  item_data | self.get_additional(video) | self.get_locations(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_media(video) | self.get_countries(video) | self.get_actors(video) | self.get_directors(video) | self.get_writers(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
+                    
+                elif item_data["type"] == "show":
+                    item_data["seasons"] = self.get_seasons(video)
+                    metadata = item_data | self.get_actors(video) | self.get_directors(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_writers(video) | self.get_countries(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
+            
+                return metadata
+            else:
+                return None
         else:
-            return None
+                return None
     
     def fetch_library_items(self, library_id, item_callback=None):
         section = self.serverConnection.library.sectionByID(library_id)

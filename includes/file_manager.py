@@ -260,7 +260,7 @@ class PlexNFOFileManager():
             images = []
             cache_files = self.list_files_in_dir( os.path.join(self._cache, str(library_id), "images") )
             for itype in image_types:
-                images.append(itype+"_thumb_"+slug)        
+                images.append(str(itype)+"_thumb_"+str(slug))
             matches = self.check_exists_in_list(images, cache_files)
             for match in matches:
                 match_path = os.path.join(self._cache, str(library_id), "images", match)

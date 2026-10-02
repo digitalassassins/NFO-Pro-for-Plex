@@ -689,8 +689,9 @@ class ScannerWorker(QObject):
                     season_local_poster_folder = season.get("local_poster_folder", None)                        
                     
                     if settings.get("downloadSeasonNFO") == True:
-                        for season_local_folder in season.get("local_folders"):
-                            self._scanner.generate_season_nfo_file(season, season_local_folder) ## no actors in season info
+                        if season.get("local_folders"):
+                            for season_local_folder in season.get("local_folders"):
+                                self._scanner.generate_season_nfo_file(season, season_local_folder) ## no actors in season info
                     
                     ## find the season web urls for artwork
                     for image in season["images"]:
