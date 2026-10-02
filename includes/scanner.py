@@ -245,7 +245,7 @@ class Scanner(QObject):
                         metadata["seasons"][season_no]["local_poster"] = file
                         metadata["seasons"][season_no]["local_poster_folder"] = local_folder
                         image_location = str( os.path.join(local_folder, file) ).replace("\\","/")
-                        thumbnail_items.append({ "title": metadata["title"] + " Season " + str(season_no), "image": image_location, "image_type":"poster", "image_slug": metadata['slug'] + "-season-" + str(season_no), "gen": metadata['guid'].replace("plex://show/", "") })
+                        thumbnail_items.append({ "title": str(metadata["title"]) + " Season " + str(season_no), "image": image_location, "image_type":"poster", "image_slug": str(metadata['slug']) + "-season-" + str(season_no), "gen": metadata['guid'].replace("plex://show/", "") })
                     else:
                         self.log("Could not detect local Season Metadata for " + metadata["title"] + " Season " + str(season_no) , "error")
         
@@ -398,12 +398,12 @@ class Scanner(QObject):
                                 ## work out the show folders
                                 show_folder = self.fileManager.get_path(season_folder)
                                 if show_folder not in metadata["local_folders"]:
-                                    metadata["local_folders"].append( show_folder )
-                                ## now we check the art locations
-                                metadata = self.check_for_tv_art_locations(metadata)
+                                    metadata["local_folders"].append( show_folder )                                
                                 ## we have managed to match the episode file so we can save the data
                                 episode_file_match = True
             if episode_file_match == True:
+                ## now we check the art locations
+                metadata = self.check_for_tv_art_locations(metadata)
                 ## if any file has matched then we save the data
                 self.fileManager.save_video_data(str(key), str(metadata["slug"]), metadata) ## save the found data to a json file to the library key and use the video slug for filename
         
@@ -686,11 +686,11 @@ class ScannerWorker(QObject):
                     ## falsify the web url for season poster and background
                     this_season_poster_web_url = False
                     this_season_background_web_url = False
-                    season_local_poster_folder = season.get("local_poster_folder")
+                    season_local_poster_folder = season.get("local_poster_folder", None)                        
                     
                     if settings.get("downloadSeasonNFO") == True:
                         for season_local_folder in season.get("local_folders"):
-                            self._scanner.generate_season_nfo_file(season, season_local_folder)
+                            self._scanner.generate_season_nfo_file(season, season_local_folder) ## no actors in season info
                     
                     ## find the season web urls for artwork
                     for image in season["images"]:
@@ -706,6 +706,7 @@ class ScannerWorker(QObject):
                             no_local_season_poster_file = False
                         else:
                             no_local_season_poster_file = True
+                            season_local_poster_folder = item.get('local_folders')[0]
                             if int(season_no) < 10:
                                 local_season_poster = f"Season0{season_no}-poster"
                             else:
