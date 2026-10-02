@@ -93,8 +93,9 @@ class Scanner(QObject):
                         self.local_files[section["key"]] = []
                         for local_folder in section["location_match"]:
                             local_folder = str(local_folder.split(":||:")[1])
-                            self.local_files[section["key"]] = self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=None)
-                            #print(self.local_files[section["key"]])
+                            self.local_files[section["key"]].extend(
+                                self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=None)
+                            )                            
                             
                         self.local_files_scanned_at[section["key"]] = time.time()
         
@@ -118,7 +119,9 @@ class Scanner(QObject):
                         for local_folder in section["location_match"]:
                             local_folder = str(local_folder.split(":||:")[1])
                             self.log(f"Scanning {local_folder} for Files..")
-                            self.local_files[section["key"]] = self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=file_scan_callback)
+                            self.local_files[section["key"]].extend(
+                                self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=file_scan_callback)
+                            )
                             self.log(f'Found { len(self.local_files[section["key"]]) } local Files..')
                             #print(self.local_files[section["key"]])
                         ## calculate the total size for all sections
