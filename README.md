@@ -8,3 +8,5 @@ Alternatively, download the source code and run it from within a Python Virtual 
 
 ## Build from Source
 If you would like, you can also build from source using the "-BUILD.bat" file on Windows to build a .exe or "-BUILD.sh" on Linux to build an executable ELF file
+
+![alt text](https://private-user-images.githubusercontent.com/22541919/663632035-ba8652a9-f3c1-4f2a-b255-3c05e848aad9.jpg)
