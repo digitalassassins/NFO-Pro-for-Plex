@@ -30,8 +30,9 @@ We have mounted that same library on our Windows machine, and it is listed as "X
 When we add a folder here, during a scan, the scanner will match folder structures to match and map Server directories to Local Directories.
 e.g. if we have a Video file located at:
 
-+ ⋅⋅⋅ **NAS:** "/volumeUSB1/usbshare1-2/Tutorials/How to Tie a Windsor Knot/How-to-Tie-a-Windsor-Knot-1080p-hevc.mkv"
-+ ⋅⋅⋅ **Windows:** "X:\NASDrive\Tutorials\How to Tie a Windsor Knot\How-to-Tie-a-Windsor-Knot-1080p-hevc.mkv"
+--- + **NAS:** "/volumeUSB1/usbshare1-2/Tutorials/How to Tie a Windsor Knot/How-to-Tie-a-Windsor-Knot-1080p-hevc.mkv"
+
+--- + **Windows:** "X:\NASDrive\Tutorials\How to Tie a Windsor Knot\How-to-Tie-a-Windsor-Knot-1080p-hevc.mkv"
 
 The program will detect the server directory as "/volumeUSB1/usbshare1-2/Tutorials/How to Tie a Windsor Knot/"
 and the local directory will be: "X:\NASDrive\Tutorials\How to Tie a Windsor Knot\", which will then be used to save files locally.
