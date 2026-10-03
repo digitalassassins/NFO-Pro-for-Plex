@@ -9,6 +9,7 @@ from includes.plex_api_manager import PlexNFOPlexAPIManager
 from includes.nfo_manager import PlexNFOGenerator
 from includes.progress_calculator import ProgressCalculator
 
+import sys
 import os
 import time
 import json
@@ -525,7 +526,7 @@ class ScannerWorker(QObject):
                 last_count = self.processedThumbnails      # progress is being made, reset the stall clock
                 last_change = time.perf_counter()
             elif time.perf_counter() - last_change > stall_timeout:
-                msg = "Thumbnail generation stalled (%d/%d), moving on" % (self.processedThumbnails, self.totalThumbnails)
+                msg = "Thumbnail generation stalled for (%d/%d), moving on" % (self.processedThumbnails, self.totalThumbnails)
                 print("[thumbs]", msg)
                 logging.getLogger("plexnfopro").warning(msg)
                 break
@@ -820,14 +821,14 @@ class ScannerWorker(QObject):
                                         thumb_web_url = image.get("web_url")
                                         self._scanner.download_media_file(self._scanner.fileManager.get_path(episode.get("locations")[0]), thumb_web_url, self._scanner.fileManager.remove_extension(self._scanner.fileManager.get_filename( episode.get("locations")[0]) ), "thumb")
         
-        def run(self):
-            try:
-                self._run_mode()
-            except Exception:
-                sys.excepthook(*sys.exc_info())   # reported by the global handler
-            finally:
-                self.update_progress(100)
-                self.finished.emit()              # always runs, so the thread quits and _busy clears
+    def run(self):
+        try:
+            self._run_mode()
+        except Exception:
+            sys.excepthook(*sys.exc_info())   # reported by the global handler
+        finally:
+            self.update_progress(100)
+            self.finished.emit()              # always runs, so the thread quits and _busy clears
         
 class PlexNFOScanner(QObject):
     starting = pyqtSignal()             ## send back task starting

@@ -2,7 +2,7 @@ import sys
 from PyQt6 import QtCore, QtGui, QtWidgets, sip
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 #from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import QTimer, QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QUrl, QTimer, QObject, QThread, pyqtSignal
 import os
 import time
 import images.images
@@ -327,45 +327,44 @@ class PlexNFOPro(QMainWindow):
     #######         Movies / Show Helpers
     #######
     ##################################################
-
+    
+    def create_file_link(self, path, text="Yes"):        
+        url = QUrl.fromLocalFile(path).toString() ## QUrl handles UNC shares, drive letters, backslashes and spaces/brackets in the path
+        return f'<a href="{url}">{text}</a>'
+                    
     def update_row_widget_title_text(self, iwid, title):
         self.RowWidgets[iwid].ui.itemName.setText(title)
     
     def update_row_widget_year_text(self, iwid, year):
         self.RowWidgets[iwid].ui.itemYear.setText(str(year))
         
-    def update_row_widget_poster_missing_text(self, iwid, poster_file):
-        self.RowWidgets[iwid].ui.posterMissing.setText('<a href="file:///'+ poster_file +'">Yes</a>')
-        self.RowWidgets[iwid].ui.posterMissing.setOpenExternalLinks(True)
-        self.RowWidgets[iwid].ui.posterMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
-    
     def update_row_widget_nfo_missing_text(self, iwid, nfo_file):
-        self.RowWidgets[iwid].ui.nfoMissing.setText('<a href="file:///'+ nfo_file +'">Yes</a>')
+        self.RowWidgets[iwid].ui.nfoMissing.setText( self.create_file_link(nfo_file) )
         self.RowWidgets[iwid].ui.nfoMissing.setOpenExternalLinks(True)
         self.RowWidgets[iwid].ui.nfoMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
     
     def update_row_widget_poster_missing_text(self, iwid, poster_file):
-        self.RowWidgets[iwid].ui.posterMissing.setText('<a href="file:///'+ poster_file +'">Yes</a>')
+        self.RowWidgets[iwid].ui.posterMissing.setText( self.create_file_link(poster_file) )
         self.RowWidgets[iwid].ui.posterMissing.setOpenExternalLinks(True)
         self.RowWidgets[iwid].ui.posterMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
     
     def update_row_widget_background_missing_text(self, iwid, background_file):
-        self.RowWidgets[iwid].ui.backgroundMissing.setText('<a href="file:///'+ background_file +'">Yes</a>')
+        self.RowWidgets[iwid].ui.backgroundMissing.setText( self.create_file_link(background_file) )
         self.RowWidgets[iwid].ui.backgroundMissing.setOpenExternalLinks(True)
         self.RowWidgets[iwid].ui.backgroundMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
     
     def update_row_widget_logo_missing_text(self, iwid, logo_file):
-        self.RowWidgets[iwid].ui.logoMissing.setText('<a href="file:///'+ logo_file +'">Yes</a>')
+        self.RowWidgets[iwid].ui.logoMissing.setText( self.create_file_link(logo_file) )
         self.RowWidgets[iwid].ui.logoMissing.setOpenExternalLinks(True)
         self.RowWidgets[iwid].ui.logoMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
     
     def update_row_widget_square_missing_text(self, iwid, square_art_file):
-        self.RowWidgets[iwid].ui.squareMissing.setText('<a href="file:///'+ square_art_file +'">Yes</a>')
+        self.RowWidgets[iwid].ui.squareMissing.setText( self.create_file_link(square_art_file) )
         self.RowWidgets[iwid].ui.squareMissing.setOpenExternalLinks(True)
         self.RowWidgets[iwid].ui.squareMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
     
     def update_row_widget_theme_missing_text(self, iwid, theme_file):
-        self.RowWidgets[iwid].ui.themeMissing.setText('<a href="file:///'+ theme_file +'">Yes</a>')
+        self.RowWidgets[iwid].ui.themeMissing.setText( self.create_file_link(theme_file) )
         self.RowWidgets[iwid].ui.themeMissing.setOpenExternalLinks(True)
         self.RowWidgets[iwid].ui.themeMissingWidget.setStyleSheet(self._STYLESHEETS["missing_tab_yes"])
     
@@ -1174,7 +1173,8 @@ class PlexNFOPro(QMainWindow):
         self.image_thread.quit()
         self.image_thread.wait()
         super().closeEvent(event)
-
+        
+#######################################
 ## helper function not included in class to move the window centre
 def move_window_center(window):
     screen = QApplication.primaryScreen()             # the screen the window will open on
@@ -1182,7 +1182,8 @@ def move_window_center(window):
     frame = window.frameGeometry()                    # the window's rectangle, including the title bar
     frame.moveCenter(available.center())              # put the rectangle's centre on the screen's centre
     window.move(frame.topLeft())                      # move the window to that rectangle's top-left corner
-    
+#######################################
+
 app = QtWidgets.QApplication(sys.argv)
 setup_logging() ## set up logging
 reporter = ErrorReporter() ## init the error reporter
