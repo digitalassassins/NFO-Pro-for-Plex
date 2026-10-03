@@ -12,6 +12,8 @@ from includes.progress_calculator import ProgressCalculator
 import os
 import time
 import json
+import requests
+import logging
 
 class Scanner(QObject):
     finished = pyqtSignal()             ## send back task complete
@@ -153,7 +155,7 @@ class Scanner(QObject):
     def get_existing_in_library(self, library_id):
         return self.fileManager.list_files_in_library_data_dir( library_id, "json", True) #ending True cuts extension
     
-    def scan_single_item(self, library_id, guid):
+    def scan_single_item(self, library_id, guid, attempts=3):
         self.scannerSwitchCacheLibrary.emit(library_id) ## switch the cache library on the thumbnail worker
         if library_id not in self.local_files:
             folder_list_timer = time.perf_counter()
@@ -163,7 +165,16 @@ class Scanner(QObject):
             print("[single] fallback folder scan took %.1fs" % (time.perf_counter() - folder_list_timer))
         
         pf_timer = time.perf_counter()
-        metadata = self.plexServer.fetch_single_item(library_id, guid)
+        metadata=None
+        for attempt in range(1, attempts + 1):
+            try:
+                metadata = self.plexServer.fetch_single_item(library_id, guid)
+                break
+            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+                logging.getLogger("plexnfopro").warning("Plex request failed (attempt %d/%d) for %s: %s", attempt, attempts, guid, e)
+                print(f"[single] Plex request failed (attempt {attempt}/{attempts}): {e}")
+                if attempt < attempts:
+                    time.sleep(2 * attempt)   # wait a little longer each time before retrying
         print("[single] plex fetch took %.1fs" % (time.perf_counter() - pf_timer))
         
         if metadata:
@@ -506,6 +517,20 @@ class ScannerWorker(QObject):
     def update_thumbnail_total(self, total):
         self.totalThumbnails = total
     
+    def wait_for_thumbnails(self, stall_timeout=60):
+        last_count = self.processedThumbnails
+        last_change = time.perf_counter()
+        while self.processedThumbnails < self.totalThumbnails:
+            if self.processedThumbnails != last_count:
+                last_count = self.processedThumbnails      # progress is being made, reset the stall clock
+                last_change = time.perf_counter()
+            elif time.perf_counter() - last_change > stall_timeout:
+                msg = "Thumbnail generation stalled (%d/%d), moving on" % (self.processedThumbnails, self.totalThumbnails)
+                print("[thumbs]", msg)
+                logging.getLogger("plexnfopro").warning(msg)
+                break
+            time.sleep(0.1)
+    
     def log_thumbnail_progress(self):
         self.log("Currently Generating Thumbnail (" + str(self.processedThumbnails) + "/" + str(self.totalThumbnails) + ") ")
         percent = ProgressCalculator(self.totalThumbnails)
@@ -586,7 +611,7 @@ class ScannerWorker(QObject):
         else:
             self.log_line(text, status)
     
-    def run(self):
+    def _run_mode(self):
         if self.mode == "full":
             ## run a clear cache if user checked
             self.clear_cache()
@@ -609,43 +634,38 @@ class ScannerWorker(QObject):
             
             ## time the thumnail generation wait time
             thumb_wait_timer = time.perf_counter()
-            while self.processedThumbnails < self.totalThumbnails:
-                time.sleep(0.1)
+            self.wait_for_thumbnails()
             print("[full] thumbnail wait took %.1fs" % (time.perf_counter() - thumb_wait_timer))
             self.log("Thumbnail Generation Time: %.1fs" % (time.perf_counter() - thumb_wait_timer), "statistic")
             
             self._scanner.reset_thumbnail_count() ## reset the thumbnail counter
             self.log("Scan Complete", None, "header")
-            self.update_progress(100) ## incase the scan gets stuck at 99.9%
-            self.finished.emit()
             
         elif self.mode == "single":
             item = self.kargs["item"]
             iwid = self.kargs["iwid"]
             library_id = item["librarySectionID"]
             guid = item["guid"]
-            ## clear this item's cache ready for a refresh
-            self._scanner.fileManager.clear_item_image_cache(item.get("librarySectionID"), item.get("slug"))
-            ## now scan the single item
-            scan_wait_timer = time.perf_counter()
-            metadata = self._scanner.scan_single_item(library_id, guid)
-            print("[single] scan of single item took %.1fs" % (time.perf_counter() - scan_wait_timer))
-            self.update_progress(50)
+            try:
+                ## clear this item's cache ready for a refresh
+                self._scanner.fileManager.clear_item_image_cache(item.get("librarySectionID"), item.get("slug"))
+                ## now scan the single item
+                scan_wait_timer = time.perf_counter()
+                metadata = self._scanner.scan_single_item(library_id, guid)
+                print("[single] scan of single item took %.1fs" % (time.perf_counter() - scan_wait_timer))
+                self.update_progress(50)
             
-            ## time the thumnail generation wait time
-            thumb_wait_timer = time.perf_counter()
-            while self.processedThumbnails < self.totalThumbnails:
-                time.sleep(0.1)
-            print("[single thumbnail wait took %.1fs" % (time.perf_counter() - thumb_wait_timer))
+                ## time the thumnail generation wait time
+                thumb_wait_timer = time.perf_counter()
+                self.wait_for_thumbnails()
+                print("[single] thumbnail wait took %.1fs" % (time.perf_counter() - thumb_wait_timer))
             
-            if metadata:
-                self.itemRefreshReady.emit(iwid, metadata)
-            
-            self.update_progress(100)
-            self._scanner.reset_thumbnail_count() ## reset the thumbnail counter
-            
-            self.finished.emit()
-            return
+                if metadata:
+                    self.itemRefreshReady.emit(iwid, metadata)
+            except Exception:
+                sys.excepthook(*sys.exc_info())   # shown by the global handler
+            finally:
+                self._scanner.reset_thumbnail_count() ## reset the thumbnail counter
         
         elif self.mode == "download":
             
@@ -799,10 +819,15 @@ class ScannerWorker(QObject):
                                     if image.get("type") == "snapshot":                                    
                                         thumb_web_url = image.get("web_url")
                                         self._scanner.download_media_file(self._scanner.fileManager.get_path(episode.get("locations")[0]), thumb_web_url, self._scanner.fileManager.remove_extension(self._scanner.fileManager.get_filename( episode.get("locations")[0]) ), "thumb")
-                    
-            self.update_progress(100)
-            self.finished.emit()
-            return
+        
+        def run(self):
+            try:
+                self._run_mode()
+            except Exception:
+                sys.excepthook(*sys.exc_info())   # reported by the global handler
+            finally:
+                self.update_progress(100)
+                self.finished.emit()              # always runs, so the thread quits and _busy clears
         
 class PlexNFOScanner(QObject):
     starting = pyqtSignal()             ## send back task starting

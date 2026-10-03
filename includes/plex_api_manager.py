@@ -25,7 +25,7 @@ class PlexNFOPlexAPIManager(QObject):
         if self.plexServerConnected == False:
             self.plex_url = plex_url
             self.plex_token = plex_token
-            self.serverConnection = PlexServer(self.plex_url, self.plex_token)
+            self.serverConnection = PlexServer(self.plex_url, self.plex_token, timeout=120)
             self.plexServerConnected = True
     
     def logger(self, text, status=None):

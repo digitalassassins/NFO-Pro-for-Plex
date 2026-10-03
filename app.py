@@ -8,6 +8,7 @@ import time
 import images.images
 import hashlib
 import time
+from includes.error_handler import setup_logging, ErrorReporter, install_global_handlers
 from includes.settings import PlexNFOProSettings
 from includes.scanner import PlexNFOScanner
 from includes.file_manager import PlexNFOFileManager
@@ -65,6 +66,7 @@ class WidgetUpdateWorker(QObject):
         
     def run(self, library_id, library_type="movie", file_list=[]):
         if self.action == "Load":
+            self.load_library_row_widgets(library_id, library_type, file_list)
             if self.prepare:
                 try:
                     print("PREPARE: Preparing Library by running a folder scan")
@@ -73,8 +75,6 @@ class WidgetUpdateWorker(QObject):
                 except Exception as e:
                     print("[load] prepare step failed:", e)
                 self.progress.emit(0)                # hides the progresss bar until the row loading starts it again
-                
-            self.load_library_row_widgets(library_id, library_type, file_list)
         self.finished.emit()
     
 class PlexNFOPro(QMainWindow):
@@ -772,7 +772,7 @@ class PlexNFOPro(QMainWindow):
             ## lists so they get rebuilt fresh instead of growing every time
             self.library_filters[library_id] = {}
             ## create the initial scan on library load
-             scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
+            scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
         
         self.switch_cache_library(self.current_library_id) ## switch the cache library
@@ -1184,7 +1184,10 @@ def move_window_center(window):
     window.move(frame.topLeft())                      # move the window to that rectangle's top-left corner
     
 app = QtWidgets.QApplication(sys.argv)
-window = PlexNFOPro()
-move_window_center(window)
-window.show()
+setup_logging() ## set up logging
+reporter = ErrorReporter() ## init the error reporter
+install_global_handlers(reporter) ## install the global handlers for error reporting
+window = PlexNFOPro() ## create the main window from the main class
+move_window_center(window) ## center the window
+window.show() ## show the main window
 sys.exit(app.exec())
