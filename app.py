@@ -32,10 +32,11 @@ class WidgetUpdateWorker(QObject):
     progress = pyqtSignal(int)      # emit the progress int value
     itemReady = pyqtSignal(list, str)   # emit data [batch_list, item_type=movie|show]
 
-    def __init__(self, action, fileManager=None):
+    def __init__(self, action, fileManager=None, prepare=None):
         super().__init__()
         self.action = action
         self.fileManager = fileManager
+        self.prepare = prepare          # optional job to run before the rows load
         self.dump_emit_count = 10
 
     def load_library_row_widgets(self, library_id, library_type, file_list = []):
@@ -64,6 +65,15 @@ class WidgetUpdateWorker(QObject):
         
     def run(self, library_id, library_type="movie", file_list=[]):
         if self.action == "Load":
+            if self.prepare:
+                try:
+                    print("PREPARE: Preparing Library by running a folder scan")
+                    self.progress.emit(1)            # makes the progress bar visible straight away
+                    self.prepare(self.progress.emit) # e.g. walk the library folders once and hand the scan a way to report progress     
+                except Exception as e:
+                    print("[load] prepare step failed:", e)
+                self.progress.emit(0)                # hides the progresss bar until the row loading starts it again
+                
             self.load_library_row_widgets(library_id, library_type, file_list)
         self.finished.emit()
     
@@ -756,16 +766,19 @@ class PlexNFOPro(QMainWindow):
         self.current_library_id = library_id
         self.current_library_type = "movie"
         #self.clear_filter_combo_items()
+        scan = None # set the scan callb ack to none, this is called on library load to do a list folder call, prevent SMB long process which takes ages compared to SSD
         if not filter_list:
             ## this is a full, unfiltered load - reset this library's filter
             ## lists so they get rebuilt fresh instead of growing every time
             self.library_filters[library_id] = {}
+            ## create the initial scan on library load
+             scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
         
         self.switch_cache_library(self.current_library_id) ## switch the cache library
         self.clear_scroll_area()
         thread = QThread()
-        worker = WidgetUpdateWorker("Load", self.fileManager)
+        worker = WidgetUpdateWorker("Load", self.fileManager, prepare=scan)
         worker.moveToThread(thread)
         thread.started.connect(lambda: worker.run(self.current_library_id, "movie", filter_list))
         #worker.finished.connect(self.calculate_filter_items) ## calculate the filter combo items once progress is complete
@@ -929,16 +942,19 @@ class PlexNFOPro(QMainWindow):
         self.current_library_id = library_id
         self.current_library_type = "show"
         #self.clear_filter_combo_items()
+        scan = None # set the scan callb ack to none, this is called on library load to do a list folder call, prevent SMB long process which takes ages compared to SSD
         if not filter_list:
             ## this is a full, unfiltered load - reset this library's filter
             ## lists so they get rebuilt fresh instead of growing every time
             self.library_filters[library_id] = {}
+            ## create the initial scan on library load
+            scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
         
         self.switch_cache_library(self.current_library_id) ## switch the cache library
         self.clear_scroll_area()
         thread = QThread()
-        worker = WidgetUpdateWorker("Load", self.fileManager)
+        worker = WidgetUpdateWorker("Load", self.fileManager, prepare=scan)
         worker.moveToThread(thread)
         thread.started.connect(lambda: worker.run(self.current_library_id, "show", filter_list))
         #worker.finished.connect(self.calculate_filter_items) ## calculate the filter combo items once progress is complete

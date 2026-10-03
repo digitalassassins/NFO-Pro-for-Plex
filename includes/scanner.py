@@ -78,10 +78,7 @@ class Scanner(QObject):
     def set_cache_clear(self, cache_clear=False):
         self.cache_clear = cache_clear ## clear cache bool
     
-    def list_folder_matched_single_section_by_id(self, library_id, max_age=300):
-        last_scan = self.local_files_scanned_at.get(library_id)
-        if last_scan and self.local_files.get(library_id) and (time.time() - last_scan) < max_age:
-            return    # scanned recently, reuse the results already stored in self.local_files
+    def list_folder_matched_single_section_by_id(self, library_id, progress_callback=None):
         sections = self.fileManager.load_saved_sections()
         if sections:
             for key in list(sections):
@@ -91,12 +88,25 @@ class Scanner(QObject):
                         ## store the matched local folders
                         self.local_folders[section["key"]] = section["location_match"]
                         self.local_files[section["key"]] = []
+                        
+                        expected = int(section.get("total_items") or 0)  # estimate of how many files we'll find
+                        found = 0
+                        last_percent = -1
+                        
+                        def on_file_found(path):
+                            nonlocal found, last_percent
+                            found += 1
+                            if progress_callback and expected:
+                                percent = min(99, int(found * 100 / expected))  # never hit 100 until the scan is done
+                                if percent != last_percent:                     # only report when the number changes
+                                    last_percent = percent
+                                    progress_callback(percent)
+                        
                         for local_folder in section["location_match"]:
                             local_folder = str(local_folder.split(":||:")[1])
                             self.local_files[section["key"]].extend(
-                                self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=None)
-                            )                            
-                            
+                                self.fileManager.file_scan(local_folder, self.fileManager.accepted_extensions("Video"), item_callback=on_file_found)
+                            )
                         self.local_files_scanned_at[section["key"]] = time.time()
         
     def list_folder_matched_sections(self):
@@ -145,11 +155,23 @@ class Scanner(QObject):
     
     def scan_single_item(self, library_id, guid):
         self.scannerSwitchCacheLibrary.emit(library_id) ## switch the cache library on the thumbnail worker
-        self.list_folder_matched_single_section_by_id(library_id)
+        if library_id not in self.local_files:
+            folder_list_timer = time.perf_counter()
+            ## safety net only: the library load should already have done this
+            print("[single] WARNING: no stored file list, scanning folders now")
+            self.list_folder_matched_single_section_by_id(library_id)
+            print("[single] fallback folder scan took %.1fs" % (time.perf_counter() - folder_list_timer))
+        
+        pf_timer = time.perf_counter()
         metadata = self.plexServer.fetch_single_item(library_id, guid)
+        print("[single] plex fetch took %.1fs" % (time.perf_counter() - pf_timer))
+        
         if metadata:
+            save_timer = time.perf_counter()
             #print(metadata)
-            return self.save_scanned_item(library_id, metadata)
+            result = self.save_scanned_item(library_id, metadata)
+            print("[single] save + art lookup took %.1fs" % (time.perf_counter() - save_timer))
+            return result
     
     def scan_section_items(self, library_id):
         self.scannerSwitchCacheLibrary.emit(library_id) ## switch the cache library on the thumbnail worker
@@ -519,6 +541,8 @@ class ScannerWorker(QObject):
             return '<span color="yellow"><b>WARNING:</b><span> '
         elif label == "error":
             return '<span color="red"><b>ERROR:</b><span> '
+        elif label == "statistic":
+            return '<span color="blue"><b>STAT:</b><span> '
         else:
             return ''
     
@@ -576,12 +600,19 @@ class ScannerWorker(QObject):
             self.init_progress(self.totalItems)
             
             ## run through each matched library and get the items
+            scan_wait_timer = time.perf_counter()
             self.log("Scanning Library Items...", None, "header")
             for library_id in matched_libraries:
                 self._scanner.scan_section_items(library_id)
+            print("[full] scan of library took %.1fs" % (time.perf_counter() - scan_wait_timer))
+            self.log("Library Scan Time: %.1fs" % (time.perf_counter() - scan_wait_timer), "statistic")
             
+            ## time the thumnail generation wait time
+            thumb_wait_timer = time.perf_counter()
             while self.processedThumbnails < self.totalThumbnails:
-                time.sleep(1)
+                time.sleep(0.1)
+            print("[full] thumbnail wait took %.1fs" % (time.perf_counter() - thumb_wait_timer))
+            self.log("Thumbnail Generation Time: %.1fs" % (time.perf_counter() - thumb_wait_timer), "statistic")
             
             self._scanner.reset_thumbnail_count() ## reset the thumbnail counter
             self.log("Scan Complete", None, "header")
@@ -596,14 +627,17 @@ class ScannerWorker(QObject):
             ## clear this item's cache ready for a refresh
             self._scanner.fileManager.clear_item_image_cache(item.get("librarySectionID"), item.get("slug"))
             ## now scan the single item
+            scan_wait_timer = time.perf_counter()
             metadata = self._scanner.scan_single_item(library_id, guid)
+            print("[single] scan of single item took %.1fs" % (time.perf_counter() - scan_wait_timer))
             self.update_progress(50)
-            #print("Total Thumbs:", self.totalThumbnails)
-            #print("Proc Thumbs:", self.processedThumbnails)
+            
+            ## time the thumnail generation wait time
+            thumb_wait_timer = time.perf_counter()
             while self.processedThumbnails < self.totalThumbnails:
-                time.sleep(1)
-                #print("Total Thumbs:", self.totalThumbnails)
-                #print("Proc Thumbs:", self.processedThumbnails)
+                time.sleep(0.1)
+            print("[single thumbnail wait took %.1fs" % (time.perf_counter() - thumb_wait_timer))
+            
             if metadata:
                 self.itemRefreshReady.emit(iwid, metadata)
             

@@ -218,7 +218,7 @@ class PlexNFOPlexAPIManager(QObject):
     
     def find_item_by_guid(self, section, guid):
         ''' find an item in a library section by its agent guid '''
-        # 1) try the server-side guid filter first (fast, one request)
+        ## try the server-side guid filter first (fast, one request)
         try:
             results = section.search(guid=guid)
             if results:
@@ -226,7 +226,7 @@ class PlexNFOPlexAPIManager(QObject):
         except Exception:
             pass  # filter not supported for this guid, fall through
 
-        # 2) fall back to walking the library and comparing guids
+        ## fall back to walking the library and comparing guids
         for item in section.all():
             if item.guid == guid:
                 return item
