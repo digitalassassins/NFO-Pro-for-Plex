@@ -71,6 +71,11 @@ class Scanner(QObject):
             if self.plex_url != "" and self.plex_token != "":
                 self.plexServer.connect( self.plex_url, self.plex_token )
     
+    def reconnect_to_plex_server(self):
+        self.plex_connected = False                                     ## set the plex connected flag as false
+        self.get_plex_credentials()                                     ## get the plex new saved plex credentials
+        self.connect_to_plex_server()                                   ## connect the plex server on init
+        
     def log(self, text="", status=None, ltype="line"):
         self.scannerLog.emit(text, status, ltype)
     
@@ -348,14 +353,20 @@ class Scanner(QObject):
                 if self.fileManager.check_valid_extension(file, "Image"):
                     ## poster
                     if any( name in file for name in self.valid_names["Poster"] ):
-                        metadata["local_poster"] = file
-                        image_location = str( os.path.join(local_folder, metadata["local_poster"]) ).replace("\\","/")
-                        thumbnail_items.append({ "title": metadata["title"], "image": image_location, "image_type":"poster", "image_slug": metadata['slug'], "gen": metadata['id'] })                
+                        if file.startswith("movieset-"): ## skip if it is a movie collection poster
+                            pass
+                        else:                            
+                            metadata["local_poster"] = file
+                            image_location = str( os.path.join(local_folder, metadata["local_poster"]) ).replace("\\","/")
+                            thumbnail_items.append({ "title": metadata["title"], "image": image_location, "image_type":"poster", "image_slug": metadata['slug'], "gen": metadata['id'] })                
                     ## background        
                     if any( name in file for name in self.valid_names["Background"] ):
-                        metadata["local_background"] = file
-                        image_location = str( os.path.join(local_folder, metadata["local_background"]) ).replace("\\","/")
-                        thumbnail_items.append({ "title": metadata["title"], "image": image_location, "image_type":"background", "image_slug": metadata['slug'], "gen": metadata['id'] })                
+                        if file.startswith("movieset-"): ## skip if it is a movie collection background
+                            pass
+                        else: 
+                            metadata["local_background"] = file
+                            image_location = str( os.path.join(local_folder, metadata["local_background"]) ).replace("\\","/")
+                            thumbnail_items.append({ "title": metadata["title"], "image": image_location, "image_type":"background", "image_slug": metadata['slug'], "gen": metadata['id'] })                
                     ## logo
                     if any( name in file for name in self.valid_names["Logo"] ):
                         metadata["local_logo"] = file
@@ -840,6 +851,10 @@ class PlexNFOScanner(QObject):
         self.init_scanner_ui()
         self._scanner = Scanner(self.settings)
         self._busy = False
+    
+    def reconnect_to_plex_server(self):
+        print("Reconnecting to Plex..")
+        self._scanner.reconnect_to_plex_server()
     
     def _clear_busy(self):
         self._busy = False

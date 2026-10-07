@@ -148,7 +148,11 @@ class PlexNFOPro(QMainWindow):
         self.create_filter_combo_box()
         
         ## set up to rescan when the settings page has been closed
-        self.scanner.scannerDialog.finished.connect(self.scan_library_sections) 
+        
+        ## when the scanner dialog is closed rescan the sections
+        self.scanner.scannerDialog.finished.connect(self.scan_library_sections)
+        ## reconnect to the plex server inside the scanner when the settings have been changed
+        self.settings.settingsDialog.finished.connect(self.scanner.reconnect_to_plex_server)
     
     def close_installer_splash(self):
         try:

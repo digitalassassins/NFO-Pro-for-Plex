@@ -330,8 +330,7 @@ class PlexNFOPlexAPIManager(QObject):
                 if not ext or ext == "jpeg":
                     ext = "png"
             elif media_type == "theme":
-                if not ext or ext == "jpeg":
-                    ext = "mp3"
+                ext = "mp3"
             else:
                 if not ext or ext == "jpeg":
                     ext = "jpg"
