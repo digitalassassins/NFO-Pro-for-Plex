@@ -139,15 +139,13 @@ class PlexNFOPro(QMainWindow):
         self.mainUI.searchLineEdit.returnPressed.connect(self.search_library)
         self.mainUI.searchLineEdit.textChanged.connect(self.search_library)
         self.mainUI.downloadAllButton.clicked.connect(self.download_all_items)
+        self.mainUI.refreshAllButton.clicked.connect(self.refresh_all_items)
         self.mainUI.donateButton.clicked.connect(self.open_donate)
         
         ## build the menu if we have sections downloaded
         self.MenuButtons = {}
         self.menu_first_init = True
         self.build_main_menu()
-        self.create_filter_combo_box()
-        
-        ## set up to rescan when the settings page has been closed
         
         ## when the scanner dialog is closed rescan the sections
         self.scanner.scannerDialog.finished.connect(self.scan_library_sections)
@@ -219,6 +217,7 @@ class PlexNFOPro(QMainWindow):
         self.mainUI.searchButton.setEnabled(False)
         self.mainUI.filterComboBox.setEnabled(False)
         self.mainUI.downloadAllButton.setEnabled(False)
+        self.mainUI.refreshAllButton.setEnabled(False)
         self.mainUI.settingsButton.setEnabled(False)
     
     def enable_controls_after_load(self):
@@ -226,6 +225,7 @@ class PlexNFOPro(QMainWindow):
         self.mainUI.searchButton.setEnabled(True)
         self.mainUI.filterComboBox.setEnabled(True)
         self.mainUI.downloadAllButton.setEnabled(True)
+        self.mainUI.refreshAllButton.setEnabled(True)
         self.mainUI.settingsButton.setEnabled(True)
     
 
@@ -467,20 +467,16 @@ class PlexNFOPro(QMainWindow):
             widget.ui.itemDataDownloadButton.setEnabled(True)
         return
     
-    def reset_row_status(self, iwid):
-        
+    def reset_row_status(self, iwid):        
         ui = self.RowWidgets[iwid].ui
-
         ## local badges: nfoMissing / nfoMissingWidget, posterMissing / posterMissingWidget, ...
         for name in ["nfo", "poster", "background", "logo", "square", "theme"]:
             getattr(ui, name + "Missing").setText("No")
             getattr(ui, name + "MissingWidget").setStyleSheet(self._STYLESHEETS["missing_tab_no"])
-
         ## server badges: serverPosterMissing / serverPosterMissingWidget, ...
         for name in ["Poster", "Background", "Logo", "Square", "Theme"]:
             getattr(ui, "server" + name + "Missing").setText("No")
-            getattr(ui, "server" + name + "MissingWidget").setStyleSheet(self._STYLESHEETS["missing_tab_no"])
-        
+            getattr(ui, "server" + name + "MissingWidget").setStyleSheet(self._STYLESHEETS["missing_tab_no"])        
         ## remove this row from every "missing" filter list; update_item_widget_data re-adds it where still missing
         for filter_type, ids in self.library_filters.items():
             if isinstance(ids, list):   # some entries are dicts keyed by library id, skip those
@@ -551,41 +547,44 @@ class PlexNFOPro(QMainWindow):
             print("[batch] gave up refreshing, moving on:", iwid)
             on_done()
         
-    def download_all_items(self):
-        
+    def download_all_items(self):        
         # Decide which rows to download BEFORE any download starts,
         # so rows getting disabled mid-download doesn't affect the list
         self.download_queue = [
             iwid for iwid, widget in self.RowWidgets.items()
             if widget.isVisible()
-        ]
+        ]        
+        ## calculate the percentage for the overall refresh job
+        self.dj_percent = ProgressCalculator( len(self.download_queue) ) ## work out the percentage        
         self.download_batch_running = True
         self.current_downloading_iwid = None   # the item currently downloading
         self.download_next_item()
         
-    def download_next_item(self):
-        
+    def download_next_item(self):        
         #now = time.perf_counter()
         #inner = self.scanner._scanner   # the Scanner object that owns scannerLog
         #print("[batch] scannerLog receivers:", inner.receivers(inner.scannerLog),
         #      "| seconds since last item: %.1f" % (now - getattr(self, "_last_item_time", now)))
-        #self._last_item_time = now
-        
+        #self._last_item_time = now        
         if not self.download_queue:
             self.download_batch_running = False
             self.current_downloading_iwid = None
             print("[batch] all downloads finished")
+            self.update_main_progress_bar( 100 )
+            self.dj_percent = None
             return
 
         self.current_downloading_iwid = self.download_queue.pop(0)
         print("[batch] next item:", self.RowWidgets[self.current_downloading_iwid].data["title"])
         if not self.download_single_item(self.current_downloading_iwid):
             print("[batch] could not start, skipping:", self.RowWidgets[self.current_downloading_iwid].data["title"])
+            self.update_main_progress_bar( self.dj_percent.add() )
             self.download_next_item()
         
     def on_download_finished(self, iwid):
         # Only move on if this finish belongs to the batch's current item
         if self.download_batch_running and iwid == self.current_downloading_iwid:
+            self.update_main_progress_bar( self.dj_percent.add() )
             self.download_next_item()
     
     def download_single_item(self, iwid):
@@ -610,7 +609,60 @@ class PlexNFOPro(QMainWindow):
         started = self.scanner.start_download_item(iwid=iwid, item=self.RowWidgets[iwid].data, finished_callback=refresh_callback)
         print("[batch] download started:", iwid, started)
         return started
+    
+    def on_refresh_finished(self, iwid):
+        # Only move on if this finish belongs to the batch's current item
+        if self.refresh_batch_running and iwid == self.current_refreshing_iwid:
+            self.update_main_progress_bar( self.rj_percent.add() )
+            self.refresh_next_item()
+    
+    def refresh_next_item(self):
+        if not self.refresh_queue:
+            self.refresh_batch_running = False
+            self.current_refreshing_iwid = None
+            print("[batch] all items refreshed")
+            self.update_main_progress_bar( 100 )
+            self.rj_percent = None
+            return
+            
+        self.current_refreshing_iwid = self.refresh_queue.pop(0)
+        print("[batch] next item refresh:", self.RowWidgets[self.current_refreshing_iwid].data["title"])
+        if not self.refresh_single_item(self.current_refreshing_iwid):
+            print("[batch] could not start refresh, skipping:", self.RowWidgets[self.current_refreshing_iwid].data["title"])
+            self.update_main_progress_bar( self.rj_percent.add() )
+            self.refresh_next_item()
+            
+    def refresh_single_item(self, iwid):        
+        refreshButton = self.RowWidgets[iwid].ui.refreshButton
+        if not refreshButton.isEnabled():
+            print("[batch] refresh button disabled:", iwid)
+            return False
+        
+        t_refresh = time.perf_counter()
+        
+        def refresh_done():
+            print("[batch] refresh phase took %.1fs" % (time.perf_counter() - t_refresh))
+            self.on_refresh_finished(iwid)
 
+        self.refresh_widget(iwid, on_done=refresh_done)
+        print("[batch] refresh started:", iwid)
+        return True
+    
+    def refresh_all_items(self):
+        # Decide which rows to download BEFORE any download starts,
+        # so rows getting disabled mid-download doesn't affect the list
+        self.refresh_queue = [
+            iwid for iwid, widget in self.RowWidgets.items()
+            if widget.isVisible()
+        ]
+        
+        ## calculate the percentage for the overall refresh job
+        self.rj_percent = ProgressCalculator( len(self.refresh_queue) ) ## work out the percentage
+        
+        self.refresh_batch_running = True
+        self.current_refreshing_iwid = None   # the item currently downloading
+        self.refresh_next_item()
+    
     ##################################################
     #######
     #######             Movies
@@ -649,7 +701,8 @@ class PlexNFOPro(QMainWindow):
             nfo_file = str( os.path.join(item_data['local_folders'][0], item_data['local_nfo']) ).replace("\\","/")
             self.update_row_widget_nfo_missing_text(iwid, nfo_file)
         else: ## add the item to the filter
-            self.add_library_filter_item( "nfo", iwid)
+            if self.settings.store.get("downloadNFO", False):
+                self.add_library_filter_item( "nfo", iwid)
         
         ## check item_data poster is listed
         if item_data.get('local_poster', False):
@@ -657,7 +710,8 @@ class PlexNFOPro(QMainWindow):
             self.update_row_widget_poster_missing_text(iwid, poster)                
             image_list.append({ "wid":iwid, "image":poster, "image_type":"poster", "image_slug": item_data['slug'], "gen": self.load_generation })
         else: ## add the item to the filter
-            self.add_library_filter_item( "poster", iwid)
+            if self.settings.store.get("downloadPoster", False):
+                self.add_library_filter_item( "poster", iwid)
         
         ## check item_data background is listed
         if item_data.get('local_background', False):
@@ -665,7 +719,8 @@ class PlexNFOPro(QMainWindow):
             self.update_row_widget_background_missing_text(iwid, background)                
             image_list.append({ "wid":iwid, "image":background, "image_type":"background", "image_slug": item_data['slug'], "gen": self.load_generation })
         else: ## add the item to the filter
-            self.add_library_filter_item( "background", iwid )
+            if self.settings.store.get("downloadBackground", False):
+                self.add_library_filter_item( "background", iwid )
         
         ## check item_data logo is listed
         if item_data.get('local_logo', False):
@@ -673,14 +728,16 @@ class PlexNFOPro(QMainWindow):
             self.update_row_widget_logo_missing_text(iwid, logo)
             image_list.append({ "wid":iwid, "image":logo, "image_type":"logo", "image_slug": item_data['slug'], "gen": self.load_generation })
         else: ## add the item to the filter
-            self.add_library_filter_item( "logo", iwid)
+            if self.settings.store.get("downloadLogo", False):
+                self.add_library_filter_item( "logo", iwid)
 
         ## check item_data square is listed
         if item_data.get('local_square', False):
             square_art = str( os.path.join(item_data['local_folders'][0], item_data['local_square']) ).replace("\\","/")
             self.update_row_widget_square_missing_text(iwid, square_art)
         else: ## add the item to the filter
-            self.add_library_filter_item( "square", iwid )
+            if self.settings.store.get("downloadSquare", False):
+                self.add_library_filter_item( "square", iwid )
         
         
         ## check item_data square is listed
@@ -688,7 +745,8 @@ class PlexNFOPro(QMainWindow):
             theme = str( os.path.join(item_data['local_folders'][0], item_data['local_theme']) ).replace("\\","/")
             self.update_row_widget_theme_missing_text(iwid, theme)
         else: ## add the item to the filter
-            self.add_library_filter_item( "theme", iwid )
+            if self.settings.store.get("downloadTheme", False):
+                self.add_library_filter_item( "theme", iwid )
             
 
         #############################################
@@ -773,7 +831,7 @@ class PlexNFOPro(QMainWindow):
         if not filter_list:
             ## this is a full, unfiltered load - reset this library's filter
             ## lists so they get rebuilt fresh instead of growing every time
-            self.library_filters[library_id] = {}
+            self.library_filters = {}
             ## create the initial scan on library load
             scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
@@ -784,7 +842,7 @@ class PlexNFOPro(QMainWindow):
         worker = WidgetUpdateWorker("Load", self.fileManager, prepare=scan)
         worker.moveToThread(thread)
         thread.started.connect(lambda: worker.run(self.current_library_id, "movie", filter_list))
-        #worker.finished.connect(self.calculate_filter_items) ## calculate the filter combo items once progress is complete
+        worker.finished.connect(self.create_filter_combo_box) ## calculate the filter combo items once progress is complete
         worker.finished.connect(self.enable_controls_after_load) ## calculate the filter combo items once progress is complete
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
@@ -949,7 +1007,7 @@ class PlexNFOPro(QMainWindow):
         if not filter_list:
             ## this is a full, unfiltered load - reset this library's filter
             ## lists so they get rebuilt fresh instead of growing every time
-            self.library_filters[library_id] = {}
+            self.library_filters = {}
             ## create the initial scan on library load
             scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
@@ -960,7 +1018,7 @@ class PlexNFOPro(QMainWindow):
         worker = WidgetUpdateWorker("Load", self.fileManager, prepare=scan)
         worker.moveToThread(thread)
         thread.started.connect(lambda: worker.run(self.current_library_id, "show", filter_list))
-        #worker.finished.connect(self.calculate_filter_items) ## calculate the filter combo items once progress is complete
+        worker.finished.connect(self.create_filter_combo_box) ## calculate the filter combo items once progress is complete
         worker.finished.connect(self.enable_controls_after_load) ## calculate the filter combo items once progress is complete
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
@@ -1038,16 +1096,37 @@ class PlexNFOPro(QMainWindow):
         if not self.library_filters.get("any", False):
             self.library_filters["any"] = []
         self.library_filters["any"] = list(set(self.library_filters["any"]) | set(self.library_filters[filter_type]))
-
+    
+    
+        
+    
     def search_library(self):
+        
+        
         matches = []
-        search_terms = self.mainUI.searchLineEdit.text().lower().split(" ")
-        search_terms = list(filter(None, search_terms)) # remove any empty no character entries from the list
+        squery = self.mainUI.searchLineEdit.text()
+         
+        if squery.startswith('*'):
+            search_terms = self.mainUI.searchLineEdit.text().lower().replace("*","").rstrip().split(" ")
+        else:
+            search_terms = [squery.replace("^","").replace('"',"").lower().rstrip()]
+        
+        def search_term_filter(item):
+            restricted = ["the", "and", " "]
+            if item is not None and item not in restricted: return True; 
+            else: return False;
+        search_terms = list(filter(search_term_filter, search_terms)) # remove any empty no character entries from the list
+            
         if len(search_terms) > 0:
             for wid, titles in self.search_list.items():
                 for title in titles:
-                    if any( match in title for match in search_terms):
-                        matches.append(wid)
+                    if squery.startswith("^"):
+                        if title.startswith(f"{search_terms[0]}"):
+                            matches.append(wid)
+                    else:
+                        if any( match in title for match in search_terms):
+                            matches.append(wid)
+                            
             ## run through the widgets and hide any that are not in the matches
             for key, widget in self.RowWidgets.items():
                 if key not in matches:
@@ -1091,22 +1170,61 @@ class PlexNFOPro(QMainWindow):
         self.mainUI.mainScrollArea.viewport().update()
 
     def create_filter_combo_box(self):
+        self.clear_filter_combo_items()
         self.mainUI.filterComboBox.addItem("-- None --")
-        self.mainUI.filterComboBox.addItem("Missing Any")
-        self.mainUI.filterComboBox.addItem("Missing NFO")
-        self.mainUI.filterComboBox.addItem("Missing Poster")
-        self.mainUI.filterComboBox.addItem("Missing Background")
-        self.mainUI.filterComboBox.addItem("Missing Logo")
-        self.mainUI.filterComboBox.addItem("Missing Square")
+        
+        downloadNFO = self.settings.store.get("downloadNFO", False)
+        downloadPoster = self.settings.store.get("downloadPoster", False)
+        downloadBackground = self.settings.store.get("downloadBackground", False)
+        downloadLogo = self.settings.store.get("downloadLogo", False)
+        downloadSquare = self.settings.store.get("downloadSquare", False)
+        downloadTheme = self.settings.store.get("downloadTheme", False)
+        
+        print("Current Library ID: ",self.current_library_id)
+        print("Filter Items: ", self.library_filters)
+        
+        if downloadNFO == True:
+            nfo_items = self.library_filters.get("nfo", [])
+            if len(nfo_items) > 0:
+                filter_added = True
+                self.mainUI.filterComboBox.addItem("Missing NFO")
+        if downloadPoster == True:
+            poster_items = self.library_filters.get("poster", [])
+            if len(poster_items) > 0:
+                filter_added = True
+                self.mainUI.filterComboBox.addItem("Missing Poster")
+        if downloadBackground == True:
+            background_items = self.library_filters.get("background", [])
+            if len(background_items) > 0:
+                filter_added = True
+                self.mainUI.filterComboBox.addItem("Missing Background")
+        if downloadLogo == True:
+            logo_items = self.library_filters.get("logo", [])
+            if len(logo_items) > 0:
+                filter_added = True
+                self.mainUI.filterComboBox.addItem("Missing Logo")
+        if downloadSquare == True:
+            square_items = self.library_filters.get("square", [])
+            if len(square_items) > 0:
+                filter_added = True
+                self.mainUI.filterComboBox.addItem("Missing Square")
+        if downloadTheme == True:
+            theme_items = self.library_filters.get("theme", [])
+            if len(theme_items) > 0:
+                filter_added = True
+                self.mainUI.filterComboBox.addItem("Missing Theme")
+        
+        ## if any of them are true then display the server and local labels
+        if [downloadNFO,downloadPoster,downloadBackground,downloadLogo,downloadSquare,downloadTheme].count(True) > 0:
+            self.mainUI.filterComboBox.addItem("Missing Any")
+        
+        ## add the filter to when the box is activated
         self.mainUI.filterComboBox.activated.connect(self.load_filtered_widgets)
     
-    ''' def clear_filter_combo_items(self):
+    def clear_filter_combo_items(self):
         self.mainUI.filterComboBox.blockSignals(True)
         self.mainUI.filterComboBox.clear()
-        self.mainUI.filterComboBox.addItem("-- None --")
         self.mainUI.filterComboBox.blockSignals(False)
-        self.mainUI.filterComboBox.activated.connect(self.load_filtered_widgets)
-    '''
 
     """ def calculate_filter_items(self):
         if self.library_filters.get(self.current_library_id, False):
