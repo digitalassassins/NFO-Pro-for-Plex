@@ -227,6 +227,9 @@ class PlexNFOPro(QMainWindow):
         self.mainUI.downloadAllButton.setEnabled(True)
         self.mainUI.refreshAllButton.setEnabled(True)
         self.mainUI.settingsButton.setEnabled(True)
+        ## calculate the total rows
+        self.total_rows = len(self.RowWidgets)
+        self.update_main_rows_count(self.total_rows)
     
 
     ##################################################
@@ -1098,11 +1101,11 @@ class PlexNFOPro(QMainWindow):
         self.library_filters["any"] = list(set(self.library_filters["any"]) | set(self.library_filters[filter_type]))
     
     
-        
+    def update_main_rows_count(self, visible = 0):
+        self.mainUI.rowsNoLabel.setText(str(visible))
+        self.mainUI.rowsTotalLabel.setText(str(self.total_rows))
     
-    def search_library(self):
-        
-        
+    def search_library(self):        
         matches = []
         squery = self.mainUI.searchLineEdit.text()
          
@@ -1134,9 +1137,13 @@ class PlexNFOPro(QMainWindow):
                 else:
                     widget.setVisible(True)            
             if len(matches) > 0:
+                ## update the filtered count
+                self.update_main_rows_count(len(matches))
                 self.hide_no_items_widget()
             else:
-                self.show_no_items_widget()            
+                self.show_no_items_widget()
+                ## update the numbers filtered
+                self.update_main_rows_count(0)
         else:
             for key, widget in self.RowWidgets.items():
                 widget.setVisible(True)
@@ -1150,6 +1157,7 @@ class PlexNFOPro(QMainWindow):
             for key, widget in self.RowWidgets.items():
                 widget.setVisible(True)
             self.hide_no_items_widget()
+            self.update_main_rows_count(self.total_rows)
         else:
             filter_type = str(combo_selection).replace("Missing ", "").lower()
             if self.library_filters.get(filter_type):
@@ -1165,6 +1173,9 @@ class PlexNFOPro(QMainWindow):
                     self.set_all_widget_rows_hidden()
             else:
                 self.set_all_widget_rows_hidden()
+        
+            ## update the filtered count
+            self.update_main_rows_count(len(self.library_filters[filter_type]))
         
         ## force a repaint
         self.mainUI.mainScrollArea.viewport().update()
@@ -1186,32 +1197,26 @@ class PlexNFOPro(QMainWindow):
         if downloadNFO == True:
             nfo_items = self.library_filters.get("nfo", [])
             if len(nfo_items) > 0:
-                filter_added = True
                 self.mainUI.filterComboBox.addItem("Missing NFO")
         if downloadPoster == True:
             poster_items = self.library_filters.get("poster", [])
             if len(poster_items) > 0:
-                filter_added = True
                 self.mainUI.filterComboBox.addItem("Missing Poster")
         if downloadBackground == True:
             background_items = self.library_filters.get("background", [])
             if len(background_items) > 0:
-                filter_added = True
                 self.mainUI.filterComboBox.addItem("Missing Background")
         if downloadLogo == True:
             logo_items = self.library_filters.get("logo", [])
             if len(logo_items) > 0:
-                filter_added = True
                 self.mainUI.filterComboBox.addItem("Missing Logo")
         if downloadSquare == True:
             square_items = self.library_filters.get("square", [])
             if len(square_items) > 0:
-                filter_added = True
                 self.mainUI.filterComboBox.addItem("Missing Square")
         if downloadTheme == True:
             theme_items = self.library_filters.get("theme", [])
             if len(theme_items) > 0:
-                filter_added = True
                 self.mainUI.filterComboBox.addItem("Missing Theme")
         
         ## if any of them are true then display the server and local labels
