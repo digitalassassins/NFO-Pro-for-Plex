@@ -2,6 +2,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 import requests
 import json
 import os
+from urllib.parse import quote
 from plexapi.base import Playable
 from plexapi.exceptions import NotFound, Unauthorized
 from plexapi.media import Image, Theme
@@ -46,6 +47,14 @@ class PlexNFOPlexAPIManager(QObject):
         if [item for item in list1 if item in list2]:
             #print("--- Found"+ key1 +" in "+ key2 + " ---")
             return key2 + ":||:" + key1
+    
+    def get_web_dashboard_url(self, item):
+        if item.key:
+            return (
+                f"https://app.plex.tv/desktop/#!/server/{self.serverConnection.machineIdentifier}/details?key={quote(item.key, safe='')}"
+            )
+        else:
+            return ""
     
     def locations_match(self, ltype, svr_loc_list):
         from pathlib import Path
@@ -250,7 +259,8 @@ class PlexNFOPlexAPIManager(QObject):
             elif item_data["type"] == "show":
                 item_data["seasons"] = self.get_seasons(video)
                 metadata = item_data | self.get_actors(video) | self.get_directors(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_writers(video) | self.get_countries(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
-        
+            
+            metadata["dash_url"] = self.get_web_dashboard_url(video) ## get the dashboard url
             return metadata
         else:
             return None
@@ -277,7 +287,9 @@ class PlexNFOPlexAPIManager(QObject):
                 elif item_data["type"] == "show":
                     item_data["seasons"] = self.get_seasons(video)
                     metadata = item_data | self.get_actors(video) | self.get_directors(video) | self.get_guids(video) | self.get_labels(video) | self.get_ratings(video) | self.get_writers(video) | self.get_countries(video) | self.get_genres(video) | self.get_collections(video) | self.get_images(video)
-                    
+                
+                metadata["dash_url"] = self.get_web_dashboard_url(video) ## get the dashboard url
+                
                 if item_callback:
                     item_callback(metadata)
 

@@ -38,6 +38,9 @@ class Ui_Scan(object):
         self.clearCacheCheckBox = QtWidgets.QCheckBox(parent=Scan)
         self.clearCacheCheckBox.setObjectName("clearCacheCheckBox")
         self.scanFooterHLayout.addWidget(self.clearCacheCheckBox)
+        self.clearThumbnailCacheCheckBox = QtWidgets.QCheckBox(parent=Scan)
+        self.clearThumbnailCacheCheckBox.setObjectName("clearThumbnailCacheCheckBox")
+        self.scanFooterHLayout.addWidget(self.clearThumbnailCacheCheckBox)
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
         self.scanFooterHLayout.addItem(spacerItem)
         self.scanButton = QtWidgets.QPushButton(parent=Scan)
@@ -53,7 +56,8 @@ class Ui_Scan(object):
         _translate = QtCore.QCoreApplication.translate
         Scan.setWindowTitle(_translate("Scan", "Scanner"))
         self.scanProgressBar.setFormat(_translate("Scan", "%p%"))
-        self.clearCacheCheckBox.setText(_translate("Scan", "Clear Cache"))
+        self.clearCacheCheckBox.setText(_translate("Scan", "Clear Data Cache"))
+        self.clearThumbnailCacheCheckBox.setText(_translate("Scan", "Clear Thumbnail Cache"))
         self.scanButton.setText(_translate("Scan", "Scan"))
 
 

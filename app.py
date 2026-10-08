@@ -8,6 +8,7 @@ import time
 import images.images
 import hashlib
 import time
+from urllib.parse import urlencode
 from includes.error_handler import setup_logging, ErrorReporter, install_global_handlers
 from includes.settings import PlexNFOProSettings
 from includes.scanner import PlexNFOScanner
@@ -338,7 +339,10 @@ class PlexNFOPro(QMainWindow):
     def create_file_link(self, path, text="Yes"):        
         url = QUrl.fromLocalFile(path).toString() ## QUrl handles UNC shares, drive letters, backslashes and spaces/brackets in the path
         return f'<a href="{url}">{text}</a>'
-                    
+    
+    def create_web_link(self, url, text=""):
+        return f'<a href="{url}">{text}</a>'
+    
     def update_row_widget_title_text(self, iwid, title):
         self.RowWidgets[iwid].ui.itemName.setText(title)
     
@@ -666,6 +670,30 @@ class PlexNFOPro(QMainWindow):
         self.current_refreshing_iwid = None   # the item currently downloading
         self.refresh_next_item()
     
+    def google_image_link(self, title: str, year: int | None = None, find="logo"):        
+        query_object = {"udm": 2}
+        if find == "square":
+            query_object["imgar"] = "s"
+            query = f"{title} {str(year)}" if year else f"{title}"
+        else:
+            query = f"{title} {str(year)} {find}" if year else f"{title} {find}"            
+        query_object["q"] = query
+        return "https://www.google.com/search?" + urlencode(query_object)
+    
+    def tmdb_image_link(self, tmdbid, item_type="movie", find="logo"):
+        return f"https://www.themoviedb.org/{urlencode(item_type)}/images/{urlencode(find)}s"
+    
+    def open_dashboard_url(self, url):
+        import webbrowser
+        print("Trying Url:", url)
+        try:
+            webbrowser.open(f'{str(url)}', new=0, autoraise=True)
+        except Exception as e:
+            print(e)
+    
+    def open_local_folder(self, path):
+        QtGui.QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+    
     ##################################################
     #######
     #######             Movies
@@ -697,6 +725,31 @@ class PlexNFOPro(QMainWindow):
             showSeasonsBtn.clicked.connect(lambda: self.toggle_season_display(item_data, iwid))
         else:
             self.RowWidgets[iwid].ui.seasonHolderWidget.setVisible(False)
+        
+        ## make the server button a link to the dash url
+        if item_data.get('dash_url', False):
+            try:
+                self.RowWidgets[iwid].ui.webDashButton.clicked.disconnect()
+            except TypeError:
+                pass  # nothing was connected yet, only disconnect on refresh
+            
+            print("Dash URL:", item_data['dash_url'])
+            self.RowWidgets[iwid].ui.webDashButton.clicked.connect(lambda: self.open_dashboard_url(item_data['dash_url']))
+            self.RowWidgets[iwid].ui.webDashButton.setVisible(True)
+        else:
+            self.RowWidgets[iwid].ui.webDashButton.setVisible(False)
+            
+        ## make the local folder button a link to the local folder
+        if item_data.get('local_folders', False):
+            try:
+                self.RowWidgets[iwid].ui.localFolderButton.clicked.disconnect()
+            except TypeError:
+                pass  # nothing was connected yet, only disconnect on refresh
+                
+            self.RowWidgets[iwid].ui.localFolderButton.clicked.connect(lambda: self.open_local_folder(item_data['local_folders'][0]) )
+            self.RowWidgets[iwid].ui.localFolderButton.setVisible(True)
+        else:
+            self.RowWidgets[iwid].ui.localFolderButton.setVisible(False)
             
         
         ## check if item_data nfo file is listed
@@ -732,6 +785,8 @@ class PlexNFOPro(QMainWindow):
             image_list.append({ "wid":iwid, "image":logo, "image_type":"logo", "image_slug": item_data['slug'], "gen": self.load_generation })
         else: ## add the item to the filter
             if self.settings.store.get("downloadLogo", False):
+                self.RowWidgets[iwid].ui.logoMissing.setText( self.create_web_link( self.google_image_link(item_data['title'], item_data['year'], "logo"), "No" ) )
+                self.RowWidgets[iwid].ui.logoMissing.setOpenExternalLinks(True)
                 self.add_library_filter_item( "logo", iwid)
 
         ## check item_data square is listed
@@ -740,6 +795,8 @@ class PlexNFOPro(QMainWindow):
             self.update_row_widget_square_missing_text(iwid, square_art)
         else: ## add the item to the filter
             if self.settings.store.get("downloadSquare", False):
+                self.RowWidgets[iwid].ui.squareMissing.setText( self.create_web_link( self.google_image_link(item_data['title'], item_data['year'], "square"), "No" ) )
+                self.RowWidgets[iwid].ui.squareMissing.setOpenExternalLinks(True)
                 self.add_library_filter_item( "square", iwid )
         
         
@@ -830,19 +887,16 @@ class PlexNFOPro(QMainWindow):
         self.current_library_id = library_id
         self.current_library_type = "movie"
         #self.clear_filter_combo_items()
-        scan = None # set the scan callb ack to none, this is called on library load to do a list folder call, prevent SMB long process which takes ages compared to SSD
         if not filter_list:
             ## this is a full, unfiltered load - reset this library's filter
             ## lists so they get rebuilt fresh instead of growing every time
             self.library_filters = {}
-            ## create the initial scan on library load
-            scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
         
         self.switch_cache_library(self.current_library_id) ## switch the cache library
         self.clear_scroll_area()
         thread = QThread()
-        worker = WidgetUpdateWorker("Load", self.fileManager, prepare=scan)
+        worker = WidgetUpdateWorker("Load", self.fileManager)
         worker.moveToThread(thread)
         thread.started.connect(lambda: worker.run(self.current_library_id, "movie", filter_list))
         worker.finished.connect(self.create_filter_combo_box) ## calculate the filter combo items once progress is complete
@@ -1006,19 +1060,19 @@ class PlexNFOPro(QMainWindow):
         self.current_library_id = library_id
         self.current_library_type = "show"
         #self.clear_filter_combo_items()
-        scan = None # set the scan callb ack to none, this is called on library load to do a list folder call, prevent SMB long process which takes ages compared to SSD
+        ##scan = None # set the scan callb ack to none, this is called on library load to do a list folder call, prevent SMB long process which takes ages compared to SSD
         if not filter_list:
             ## this is a full, unfiltered load - reset this library's filter
             ## lists so they get rebuilt fresh instead of growing every time
             self.library_filters = {}
             ## create the initial scan on library load
-            scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
+            ###scan = lambda prog_cb, lid=library_id: self.scanner._scanner.list_folder_matched_single_section_by_id(lid, progress_callback=prog_cb) ## added ti the init of worker to run a scan only on first run lamda passing stored library id
         self.disable_controls_during_load() ## disable the controls to prevent reloading
         
         self.switch_cache_library(self.current_library_id) ## switch the cache library
         self.clear_scroll_area()
         thread = QThread()
-        worker = WidgetUpdateWorker("Load", self.fileManager, prepare=scan)
+        worker = WidgetUpdateWorker("Load", self.fileManager)
         worker.moveToThread(thread)
         thread.started.connect(lambda: worker.run(self.current_library_id, "show", filter_list))
         worker.finished.connect(self.create_filter_combo_box) ## calculate the filter combo items once progress is complete
@@ -1118,6 +1172,7 @@ class PlexNFOPro(QMainWindow):
             restricted = ["the", "and", " "]
             if item is not None and item not in restricted: return True; 
             else: return False;
+            
         search_terms = list(filter(search_term_filter, search_terms)) # remove any empty no character entries from the list
             
         if len(search_terms) > 0:

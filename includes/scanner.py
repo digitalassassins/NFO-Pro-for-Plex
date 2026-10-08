@@ -161,14 +161,14 @@ class Scanner(QObject):
     def get_existing_in_library(self, library_id):
         return self.fileManager.list_files_in_library_data_dir( library_id, "json", True) #ending True cuts extension
     
-    def scan_single_item(self, library_id, guid, attempts=3):
+    def scan_single_item(self, library_id, guid, attempts=3, known_files=None):
         self.scannerSwitchCacheLibrary.emit(library_id) ## switch the cache library on the thumbnail worker
-        if library_id not in self.local_files:
-            folder_list_timer = time.perf_counter()
-            ## safety net only: the library load should already have done this
-            print("[single] WARNING: no stored file list, scanning folders now")
-            self.list_folder_matched_single_section_by_id(library_id)
-            print("[single] fallback folder scan took %.1fs" % (time.perf_counter() - folder_list_timer))
+        #if library_id not in self.local_files:
+        #    folder_list_timer = time.perf_counter()
+        #    ## safety net only: the library load should already have done this
+        #    print("[single] WARNING: no stored file list, scanning folders now")
+        #    self.list_folder_matched_single_section_by_id(library_id)
+        #    print("[single] fallback folder scan took %.1fs" % (time.perf_counter() - folder_list_timer))
         
         pf_timer = time.perf_counter()
         metadata=None
@@ -186,7 +186,7 @@ class Scanner(QObject):
         if metadata:
             save_timer = time.perf_counter()
             #print(metadata)
-            result = self.save_scanned_item(library_id, metadata)
+            result = self.save_scanned_item(library_id, metadata, known_files)
             print("[single] save + art lookup took %.1fs" % (time.perf_counter() - save_timer))
             return result
     
@@ -209,9 +209,10 @@ class Scanner(QObject):
         
         self.plexServer.fetch_library_items(library_id, item_callback=process_item_callback)
     
-    def check_for_local_file_to_retrieve_local_folder(self, vfile, librarySectionID):
+    def check_for_local_file_to_retrieve_local_folder(self, vfile, librarySectionID, known_files=None):
         vfile = self.fileManager.get_filename(vfile)
-        match = [item for item in self.local_files[librarySectionID] if str(vfile) in item]
+        pool = known_files if known_files is not None else self.local_files[librarySectionID]
+        match = [item for item in pool if str(vfile) in item]
         if match:
             return match[0]
         else:
@@ -391,7 +392,7 @@ class Scanner(QObject):
             
         return metadata
         
-    def save_scanned_item(self, key, metadata):
+    def save_scanned_item(self, key, metadata, known_files=None):
         if metadata["type"] == "movie":                   
             file = metadata.get("file", False)
             
@@ -401,7 +402,7 @@ class Scanner(QObject):
                 if not metadata.get("local_folders"):
                     metadata["local_folders"] = []
                 #print("metadataLID: ", metadata["librarySectionID"])
-                match = self.check_for_local_file_to_retrieve_local_folder(file, metadata["librarySectionID"])
+                match = self.check_for_local_file_to_retrieve_local_folder(file, metadata["librarySectionID"], known_files)
                 if match:
                     ## server data
                     metadata = metadata | self.get_server_images(metadata["images"])
@@ -430,7 +431,7 @@ class Scanner(QObject):
                 for episode_no, episode in season["episodes"].items():
                     if episode.get("locations", False):
                         for location in episode["locations"]:
-                            match = self.check_for_local_file_to_retrieve_local_folder(location, metadata["librarySectionID"])
+                            match = self.check_for_local_file_to_retrieve_local_folder(location, metadata["librarySectionID"], known_files)
                             if match:
                                 ## we have found a local file, set the local files
                                 if not metadata.get("local_files", False):
@@ -663,7 +664,7 @@ class ScannerWorker(QObject):
                 self._scanner.fileManager.clear_item_image_cache(item.get("librarySectionID"), item.get("slug"))
                 ## now scan the single item
                 scan_wait_timer = time.perf_counter()
-                metadata = self._scanner.scan_single_item(library_id, guid)
+                metadata = self._scanner.scan_single_item(library_id, guid, known_files=item.get("local_files"))
                 print("[single] scan of single item took %.1fs" % (time.perf_counter() - scan_wait_timer))
                 self.update_progress(50)
             
