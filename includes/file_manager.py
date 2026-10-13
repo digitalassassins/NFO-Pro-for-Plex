@@ -42,7 +42,7 @@ class PlexNFOFileManager():
     def clear_library_data_cache(self, library_id):
         folder_path = os.path.join( self._cache, str(library_id), "data" )
         try:
-            shutil.rmtree(self._cache)
+            shutil.rmtree(folder_path)
             self.cache_dir()
         except OSError as e:
             print("Error: %s - %s." % (e.filename, e.strerror))

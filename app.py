@@ -143,13 +143,16 @@ class PlexNFOPro(QMainWindow):
         self.mainUI.refreshAllButton.clicked.connect(self.refresh_all_items)
         self.mainUI.donateButton.clicked.connect(self.open_donate)
         
+        ## set the search line edit to white
+        self.mainUI.searchLineEdit.setStyleSheet("color: white;")
+        
         ## build the menu if we have sections downloaded
         self.MenuButtons = {}
         self.menu_first_init = True
         self.build_main_menu()
         
         ## when the scanner dialog is closed rescan the sections
-        self.scanner.scannerDialog.finished.connect(self.scan_library_sections)
+        self.scanner.scannerDialog.finished.connect(self.build_main_menu)
         ## reconnect to the plex server inside the scanner when the settings have been changed
         self.settings.settingsDialog.finished.connect(self.scanner.reconnect_to_plex_server)
     
@@ -733,7 +736,7 @@ class PlexNFOPro(QMainWindow):
             except TypeError:
                 pass  # nothing was connected yet, only disconnect on refresh
             
-            print("Dash URL:", item_data['dash_url'])
+            #print("Dash URL:", item_data['dash_url'])
             self.RowWidgets[iwid].ui.webDashButton.clicked.connect(lambda: self.open_dashboard_url(item_data['dash_url']))
             self.RowWidgets[iwid].ui.webDashButton.setVisible(True)
         else:
@@ -767,6 +770,8 @@ class PlexNFOPro(QMainWindow):
             image_list.append({ "wid":iwid, "image":poster, "image_type":"poster", "image_slug": item_data['slug'], "gen": self.load_generation })
         else: ## add the item to the filter
             if self.settings.store.get("downloadPoster", False):
+                self.RowWidgets[iwid].ui.posterMissing.setText( self.create_web_link( self.google_image_link(item_data['title'], item_data['year'], "poster"), "No" ) )
+                self.RowWidgets[iwid].ui.posterMissing.setOpenExternalLinks(True)
                 self.add_library_filter_item( "poster", iwid)
         
         ## check item_data background is listed
@@ -776,6 +781,8 @@ class PlexNFOPro(QMainWindow):
             image_list.append({ "wid":iwid, "image":background, "image_type":"background", "image_slug": item_data['slug'], "gen": self.load_generation })
         else: ## add the item to the filter
             if self.settings.store.get("downloadBackground", False):
+                self.RowWidgets[iwid].ui.backgroundMissing.setText( self.create_web_link( self.google_image_link(item_data['title'], item_data['year'], "background"), "No" ) )
+                self.RowWidgets[iwid].ui.backgroundMissing.setOpenExternalLinks(True)
                 self.add_library_filter_item( "background", iwid )
         
         ## check item_data logo is listed
@@ -800,14 +807,21 @@ class PlexNFOPro(QMainWindow):
                 self.add_library_filter_item( "square", iwid )
         
         
-        ## check item_data square is listed
+        ## check item_data themne is listed
         if item_data.get('local_theme', False):
             theme = str( os.path.join(item_data['local_folders'][0], item_data['local_theme']) ).replace("\\","/")
             self.update_row_widget_theme_missing_text(iwid, theme)
         else: ## add the item to the filter
             if self.settings.store.get("downloadTheme", False):
+                self.RowWidgets[iwid].ui.themeMissing.setText( self.create_web_link( f"https://www.televisiontunes.com/search.php?" + urlencode({"q": item_data["title"]}) , "No" ) )
+                self.RowWidgets[iwid].ui.themeMissing.setOpenExternalLinks(True)
                 self.add_library_filter_item( "theme", iwid )
-            
+        
+        ## check we are not missing any season posters, otherwise add the filter
+        if item_data.get("type") == "show":        
+            if item_data.get('season_posters_missing', False):
+                if int(item_data.get('season_posters_missing')) > 0:
+                    self.add_library_filter_item( "season_poster", iwid )
 
         #############################################
         ### Get SERVER Data and update the Widget ###
@@ -996,7 +1010,7 @@ class PlexNFOPro(QMainWindow):
         self.RowWidgets[iwid].setMaximumHeight(16777215)
         self.RowWidgets[iwid].ui.seasonListWidget.setMaximumHeight(16777215)
         ## add the season widgets to the season holder
-        for season_no, season in seasons.items():
+        for season_no, season in sorted(seasons.items(), key=lambda item: int(item[0])): ## sort the item by int sorting not string
             self.RowWidgets[iwid].SeasonWidgets[season_no] = {}
             self.create_tv_season_widget(iwid, season_no, season)
             self.RowWidgets[iwid].ui.seasonListWidgetVLayout.addWidget( self.RowWidgets[iwid].SeasonWidgets[season_no] )
@@ -1214,7 +1228,7 @@ class PlexNFOPro(QMainWindow):
             self.hide_no_items_widget()
             self.update_main_rows_count(self.total_rows)
         else:
-            filter_type = str(combo_selection).replace("Missing ", "").lower()
+            filter_type = str(combo_selection).replace("Missing ", "").lower().replace(" ", "_")
             if self.library_filters.get(filter_type):
                 if len(self.library_filters[filter_type]) > 0:
                     ## run through the widgets and hide any that are not in the matches
@@ -1245,6 +1259,7 @@ class PlexNFOPro(QMainWindow):
         downloadLogo = self.settings.store.get("downloadLogo", False)
         downloadSquare = self.settings.store.get("downloadSquare", False)
         downloadTheme = self.settings.store.get("downloadTheme", False)
+        downloadSeasonPoster = self.settings.store.get("downloadSeasonPoster", False)
         
         print("Current Library ID: ",self.current_library_id)
         print("Filter Items: ", self.library_filters)
@@ -1274,8 +1289,13 @@ class PlexNFOPro(QMainWindow):
             if len(theme_items) > 0:
                 self.mainUI.filterComboBox.addItem("Missing Theme")
         
-        ## if any of them are true then display the server and local labels
-        if [downloadNFO,downloadPoster,downloadBackground,downloadLogo,downloadSquare,downloadTheme].count(True) > 0:
+        if downloadSeasonPoster == True:
+            sposter_items = self.library_filters.get("season_poster", [])
+            if len(sposter_items) > 0:
+                self.mainUI.filterComboBox.addItem("Missing Season Poster")
+        
+        ## if any of them are true then display the missing any filter
+        if [downloadNFO,downloadPoster,downloadBackground,downloadLogo,downloadSquare,downloadTheme,downloadSeasonPoster].count(True) > 0:
             self.mainUI.filterComboBox.addItem("Missing Any")
         
         ## add the filter to when the box is activated

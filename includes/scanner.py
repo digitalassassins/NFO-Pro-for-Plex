@@ -86,6 +86,9 @@ class Scanner(QObject):
     def set_cache_clear(self, cache_clear=False):
         self.cache_clear = cache_clear ## clear cache bool
     
+    def set_data_cache_clear(self, data_cache_clear=False):
+        self.data_cache_clear = data_cache_clear ## clear cache bool
+    
     def list_folder_matched_single_section_by_id(self, library_id, progress_callback=None):
         sections = self.fileManager.load_saved_sections()
         if sections:
@@ -209,7 +212,24 @@ class Scanner(QObject):
         
         self.plexServer.fetch_library_items(library_id, item_callback=process_item_callback)
     
+    def plex_to_local(self, plex_file_path, location_match):
+        ## swap the Plex library root for the matching local root
+        p = plex_file_path.replace("\\", "/")
+        for entry in location_match:
+            plex_root, local_root = entry.split(":||:")
+            plex_root = plex_root.replace("\\", "/").rstrip("/")
+            if p.lower().startswith(plex_root.lower() + "/"):
+                return os.path.join(local_root, p[len(plex_root) + 1:])
+        return None
+    
     def check_for_local_file_to_retrieve_local_folder(self, vfile, librarySectionID, known_files=None):
+        ## just run a straight match first
+        if known_files is None:
+            ## fast path: translate the Plex path and check it directly
+            direct_file = self.plex_to_local(vfile, self.local_folders.get(librarySectionID, []))
+            if direct_file and os.path.isfile(direct_file):
+                return direct_file
+        ## no direct match found so we do a folder scan
         vfile = self.fileManager.get_filename(vfile)
         pool = known_files if known_files is not None else self.local_files[librarySectionID]
         match = [item for item in pool if str(vfile) in item]
@@ -221,6 +241,15 @@ class Scanner(QObject):
     def clear_cache(self):
         self.fileManager.clear_library_cache()
     
+    def clear_data_cache(self):
+        ## run through each library ID and remove the data folder only keeping thumbnails
+        sections = self.fileManager.load_saved_sections()
+        if sections:
+            for key in list(sections):
+                for section in sections[key]:
+                    if section.get("key", False):
+                        self.fileManager.clear_library_data_cache(section["key"])
+    
     def get_server_images(self, images):
         img_meta = {}
         for image in images:
@@ -231,19 +260,35 @@ class Scanner(QObject):
             if image_type == "backgroundSquare": img_meta["server_square"] = True
             if image_type == "snapshot": img_meta["server_thumb"] = True
         return img_meta
-        
-    def check_for_tv_art_locations(self, metadata):
-        
-        ## workout the valid season posters
-        scount = 0
+
+    def get_valid_season_poster_names_by_season_count(self, season_count):
         valid_season_posters = []
-        while scount < metadata["seasonCount"]+1:
-            scount += 1
-            valid_season_posters.append("Season"+ str(scount) )
-            valid_season_posters.append("Season"+ str(scount) +"-poster")
+        scount = 0
+        while scount < season_count+1:
+            pname = "Season"+ str(scount)
+            valid_season_posters.append( pname )
+            valid_season_posters.append( pname.lower() )
+            pname = "Season"+ str(scount) +"-poster"
+            valid_season_posters.append( pname )
+            valid_season_posters.append( pname.lower() )
             if scount < 10:
                 valid_season_posters.append("Season0"+ str(scount) )
                 valid_season_posters.append("Season0"+ str(scount) +"-poster")
+            scount += 1
+        return valid_season_posters
+    
+    def season_poster_missing_check(self, seasons, season_count):
+        spcount = 0
+        for season_no in seasons:
+            if seasons.get(season_no):
+                if seasons[season_no].get("local_poster", False):
+                    spcount +=1
+        ## return the number of missing posters
+        return season_count - spcount
+        
+    def check_for_tv_art_locations(self, metadata):        
+        ## workout the valid season posters based on number of seasons
+        valid_season_posters = self.get_valid_season_poster_names_by_season_count(metadata["seasonCount"])        
 
         ## create the empty lists for thumbnail items and root show season poster matches
         thumbnail_items = []
@@ -295,8 +340,7 @@ class Scanner(QObject):
                         image_location = str( os.path.join(local_folder, file) ).replace("\\","/")
                         thumbnail_items.append({ "title": str(metadata["title"]) + " Season " + str(season_no), "image": image_location, "image_type":"poster", "image_slug": str(metadata['slug']) + "-season-" + str(season_no), "gen": metadata['guid'].replace("plex://show/", "") })
                     else:
-                        self.log("Could not detect local Season Metadata for " + metadata["title"] + " Season " + str(season_no) , "error")
-        
+                        self.log("Could not detect local Season Posters for " + metadata["title"] + " Season " + str(season_no) , "error")
 
         ## now run through each season folder and find any other artwork if the art is in the season folder
         for season_no, season in metadata["seasons"].items():
@@ -336,6 +380,9 @@ class Scanner(QObject):
                         if file == "season.nfo":
                             ## NFO file
                             metadata["seasons"][season_no]["local_nfo"] = file
+        
+        ## check if season posters are missing for any of the seasons
+        metadata["season_posters_missing"] = self.season_poster_missing_check(metadata["seasons"], metadata["seasonCount"])
         
         ## set away the thumbnail generation for this batch of items
         self.totalThumbnails += int(len(thumbnail_items))
@@ -511,6 +558,10 @@ class ScannerWorker(QObject):
         self.cache_clear = cache_clear                                  ## clear cache bool
         self._scanner.set_cache_clear(cache_clear)                      ## pass the cache clear to the worker
     
+    def set_data_cache_clear(self, cache_clear=False):
+        self.data_cache_clear = cache_clear                                  ## clear cache bool
+        self._scanner.set_data_cache_clear(cache_clear)                      ## pass the cache clear to the worker
+    
     def set_mode(self, mode="full", **kargs):
         self.mode = mode
         self.kargs = kargs
@@ -571,6 +622,10 @@ class ScannerWorker(QObject):
             self.log("Clearing Cache Files:", None, "header")
             self._scanner.clear_cache()
             self.log(f"All Cache Files Removed...")
+        elif self.data_cache_clear:
+            self.log("Clearing Data Files:", None, "header")
+            self._scanner.clear_data_cache()
+            self.log(f"All Data Cache Files Removed...")
     
     def _labels(self, label):
         if label == "success":
@@ -886,7 +941,8 @@ class PlexNFOScanner(QObject):
         self.clear_log_window()
         self.thread = QThread()
         self.worker = ScannerWorker(self.settings, self._scanner)
-        self.worker.set_cache_clear(self.scannerUI.clearCacheCheckBox.isChecked()) ## pass in if we should clear the cache on this scan
+        self.worker.set_data_cache_clear(self.scannerUI.clearCacheCheckBox.isChecked()) ## pass in if we should clear the cache on this scan
+        self.worker.set_cache_clear(self.scannerUI.clearThumbnailCacheCheckBox.isChecked()) ## pass in if we should clear the cache on this scan
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.disable_buttons)
         self.thread.started.connect(self.worker.run)
