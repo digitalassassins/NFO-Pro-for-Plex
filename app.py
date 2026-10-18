@@ -857,8 +857,18 @@ class PlexNFOPro(QMainWindow):
         
         ## if the season is toggled open, update the season data aswell
         if item_data.get("type") == "show" and self.RowWidgets[iwid].season_toggle==True:
-            for season_no, season in item_data.get("seasons",{}).items():
-                self.update_tv_season_widget(iwid, str(season_no), season)
+            seasons = item_data.get("seasons", {})
+            shown = self.RowWidgets[iwid].SeasonWidgets or {}
+            print("[seasons] data keys:", list(seasons), "| widget keys:", list(shown))
+            if set(seasons) != set(shown):
+                ## the seasons changed (or the key types differ), so rebuild the season list from new data
+                self.collapse_season_display(iwid)
+                self.RowWidgets[iwid].SeasonWidgets = {}
+                self.expand_season_display(seasons, iwid)
+            else:
+                ## same seasons, so just refresh each widget in place
+                for season_no, season in seasons.items():
+                    self.update_tv_season_widget(iwid, season_no, season)
 
     def create_item_widget(self, iwid, item):
         ''' used to generate movie / tv show widgets, compile the filter list and then offload the images to the image loader thread '''
