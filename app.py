@@ -677,14 +677,20 @@ class PlexNFOPro(QMainWindow):
         query_object = {"udm": 2}
         if find == "square":
             query_object["imgar"] = "s"
-            query = f"{title} {str(year)}" if year else f"{title}"
+            query = f"{title} ({str(year)})" if year else f"{title}"
+        elif find == "background":
+            query_object["imgar"] = "w"
+            query = f"{title} ({str(year)})" if year else f"{title}"
+        elif find == "logo":
+            query_object["as_filetype"] = "png"
+            query = f"{title} ({str(year)})" if year else f"{title}"
         else:
-            query = f"{title} {str(year)} {find}" if year else f"{title} {find}"            
+            query = f"{title} ({str(year)}) {find}" if year else f"{title} {find}"            
         query_object["q"] = query
         return "https://www.google.com/search?" + urlencode(query_object)
     
     def tmdb_image_link(self, tmdbid, item_type="movie", find="logo"):
-        return f"https://www.themoviedb.org/{urlencode(item_type)}/images/{urlencode(find)}s"
+        return f"https://www.themoviedb.org/{item_type}/{tmdbid}/images/{find}s"
     
     def open_dashboard_url(self, url):
         import webbrowser
@@ -855,6 +861,27 @@ class PlexNFOPro(QMainWindow):
         ## offload image loading and thumbnail generation to the image worker thread
         self.image_loader(image_list) ## pass the list of images to process to the image loader thread
         
+        ## if the item has guids then we display the buttons
+        if item_data.get('guids', False):
+            guids = item_data.get('guids')
+            for guid in guids:
+                id_type = guid.get('type', False)
+                id_value = guid.get('value', False)
+                
+                if id_type and id_type == "tmdb":                    
+                    if item_data.get("type") == "show":                        
+                        itm_type = "tv"
+                    else:
+                        itm_type = "movie"
+                    if id_value:
+                        #t_url=self.tmdb_image_link(id_value, itm_type, "poster")
+                        url = f"https://www.themoviedb.org/{itm_type}/{id_value}/images/logos?image_language=en"
+                        self.RowWidgets[iwid].ui.tmdbButton.clicked.connect(lambda _checked=False, turl=url: self.open_dashboard_url(turl) )
+                    self.RowWidgets[iwid].ui.tmdbButton.setVisible(True)
+                    
+        else:
+            widget.tmdbButton.setVisible(False)
+                    
         ## if the season is toggled open, update the season data aswell
         if item_data.get("type") == "show" and self.RowWidgets[iwid].season_toggle==True:
             seasons = item_data.get("seasons", {})

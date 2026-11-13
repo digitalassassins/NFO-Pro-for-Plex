@@ -41,7 +41,7 @@ class PlexNFOPlexAPIManager(QObject):
                 if not self.local_folders_split.get(folder_type, False):
                     self.local_folders_split[folder_type] = []
                 for key in list(settings["folders"][folder_type]):
-                    self.local_folders_split[folder_type].append({f'{ settings["folders"][folder_type][key]["path"] }': settings["folders"][folder_type][key]["psplit"] })
+                    self.local_folders_split[folder_type].append({f'{ settings["folders"][folder_type][key]["path"] }': list(filter(lambda x: x.strip(), settings["folders"][folder_type][key]["psplit"])) })
     
     def cross_reference_paths(self, key1, list1, key2, list2):
         if [item for item in list1 if item in list2]:
@@ -69,25 +69,38 @@ class PlexNFOPlexAPIManager(QObject):
         server_list = []
         for location in svr_loc_list:
             parts = Path(location).parts
+            # Remove empty strings
+            parts = list(filter(lambda x: x.strip(), parts))
             server_list.append({ f"{location}": parts })
         
         #print("-----------------------------------")
         if not client_list or not server_list:
             print("No Folders to Match Against")
             return ## no list to match against
-            
-        #print("Server List: ", server_list)
-        #print("Client List: ", client_list)
+        
+        print("Server List: ", server_list)
+        print("Client List: ", client_list)
         
         for clist_items in client_list:
             for cpath, clist in clist_items.items():
+                clist = list(reversed(clist))
                 for slist_items in server_list:
                     for spath, slist in slist_items.items():
-                        list_match = self.cross_reference_paths(cpath, clist, spath, slist)
-                        if list_match:
-                            matched_paths.append( list_match )
+                        slist = list(reversed(slist))
+                        if slist is not None and clist is not None:
+                            #print("SList: ", slist)
+                            #print("CList: ", clist)
+                            print("SList: ", slist)
+                            print("CList: ", clist)
+                            if slist[0] == clist[0]: ## check the root folder to see if they match before proceeding to do a match cross reference check
+                                del slist[0]
+                                del clist[0]
+                                list_match = self.cross_reference_paths(cpath, clist, spath, slist)
+                                if list_match:
+                                    matched_paths.append( list_match )
                             
         if matched_paths:
+            print(matched_paths)
             return matched_paths
         #print("-----------------------------------")
     
