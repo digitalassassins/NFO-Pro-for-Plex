@@ -314,6 +314,8 @@ class PlexNFOPlexAPIManager(QObject):
         p_sections = {}
         p_sections['movie'] = []
         p_sections['show'] = []
+        #p_sections['artist'] = []
+        #p_sections['photo'] = []
         ## get the sections from the server
         utsections = self.serverConnection.library.sections()
         for utsection in utsections:
@@ -332,8 +334,9 @@ class PlexNFOPlexAPIManager(QObject):
                 self.logger("No matching folder for Library: <b>" + sectn_json["title"] + "</b> found on local drive..", "warning")
             
             #print(sectn)
-            self.logger("Library: " + sectn_json["title"] + " added to Library Menu..")
-            p_sections[ sectn["type"] ].append(sectn)
+            if sectn["type"] in p_sections:
+                self.logger("Library: " + sectn_json["title"] + " added to Library Menu..")
+                p_sections[ sectn["type"] ].append(sectn)
         
         self.local_folders_split = {} ## unset for the next scan incase options have changed
         return p_sections
