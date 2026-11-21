@@ -6,8 +6,36 @@ Plex backup software, built in our spare time. It pulls all metadata fields into
 Download the latest portable version for Windows here: https://github.com/digitalassassins/NFO-Pro-for-Plex/releases; 
 Alternatively, download the source code and run it from within a Python Virtual Environment.
 
+To use from a python virtual environment on Linux use the command:
+```console
+cd ~/ &&
+python3 -m venv ./NFO-Pro &&
+cd ./NFO-Pro &&
+git clone https://github.com/digitalassassins/NFO-Pro-for-Plex temp &&
+mv ./temp/* ./
+rm -rf ./temp
+source bin/activate &&
+pip install --upgrade -r requirements.txt &&
+python ./app.py
+```
+
+
 ## Build from Source
 If you would like, you can also build from source using the "-BUILD.bat" file on Windows to build a .exe or "-BUILD.sh" on Linux to build an executable ELF file
+
+Alternatively to build on Linux from the terminal, by generating a Virtual Environment, installing requirements and then building, use the command:
+
+```console
+cd ~/ &&
+python3 -m venv ./NFO-Pro &&
+cd ./NFO-Pro &&
+git clone https://github.com/digitalassassins/NFO-Pro-for-Plex temp &&
+mv ./temp/* ./
+rm -rf ./temp
+source bin/activate &&
+pip install --upgrade -r requirements.txt &&
+pyinstaller app.py --onefile --noconsole --add-data="includes:includes" --add-data="ui:ui" --add-data="images:images" --icon="images/icon.png" --splash="images/splash.jpg" --name "NFO Pro for Plex" --noconfirm
+```
 
 ## First Launch
 When you first launch the application, you will be presented with a blank page. You will want to set up initial settings; in the bottom left-hand corner of the window, click "Settings".
