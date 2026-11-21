@@ -1,2 +1,1 @@
-pyinstaller app.py --onefile --noconsole --add-data "includes;includes" --add-data "ui;ui" --add-data "images;images" --icon="images/icon.png" --splash="images/splash.jpg" --name "NFO Pro for Plex" --noconfirm
-pause
+pyinstaller app.py --onefile --noconsole --add-data="includes:includes" --add-data="ui:ui" --add-data="images:images" --icon="images/icon.png" --splash="images/splash.jpg" --name "NFO Pro for Plex" --noconfirm
