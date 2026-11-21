@@ -93,8 +93,6 @@ class PlexNFOPlexAPIManager(QObject):
                             print("SList: ", slist)
                             print("CList: ", clist)
                             if slist[0] == clist[0]: ## check the root folder to see if they match before proceeding to do a match cross reference check
-                                del slist[0]
-                                del clist[0]
                                 list_match = self.cross_reference_paths(cpath, clist, spath, slist)
                                 if list_match:
                                     matched_paths.append( list_match )
